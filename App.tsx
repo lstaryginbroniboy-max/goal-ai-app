@@ -304,12 +304,11 @@ const POMO_PHASES = [
   { name: 'Пауза',  duration:  5 * 60, color: '#10B981', bg: '#D1FAE5', emoji: '☕' },
 ];
 
-function PomodoroTimer() {
+function PomodoroTimer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
   const [phase,    setPhase]    = useState(0);
   const [timeLeft, setTimeLeft] = useState(POMO_PHASES[0].duration);
   const [running,  setRunning]  = useState(false);
   const [sessions, setSessions] = useState(0);
-  const [visible,  setVisible]  = useState(false);
   const ivRef = useRef<any>(null);
 
   useEffect(() => {
@@ -339,26 +338,12 @@ function PomodoroTimer() {
 
   return (
     <>
-      {/* FAB */}
-      <TouchableOpacity onPress={() => setVisible(true)}
-        style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10,
-          backgroundColor: running ? cur.color : '#4F46E5',
-          borderRadius: 28, width: 56, height: 56, alignItems: 'center', justifyContent: 'center',
-          shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
-        <Text style={{ fontSize: 24 }}>{running ? '⏱' : '⏱'}</Text>
-        {running && (
-          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', position: 'absolute', bottom: 6 }}>
-            {mins}:{secs}
-          </Text>
-        )}
-      </TouchableOpacity>
-
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
               <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
-              <TouchableOpacity onPress={() => setVisible(false)}>
+              <TouchableOpacity onPress={onClose}>
                 <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
               </TouchableOpacity>
             </View>
@@ -434,6 +419,7 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
   const [quickWinLoad,   setQuickWinLoad]   = useState(false);
   const [checkinPending, setCheckinPending] = useState(false);
   const [weeklyPending,  setWeeklyPending]  = useState(false);
+  const [pomoVisible,    setPomoVisible]    = useState(false);
   const [weekDone,       setWeekDone]       = useState(0);
   const [topStreak,      setTopStreak]      = useState(0);
   const scrollRef    = useRef<ScrollView>(null);
@@ -578,9 +564,9 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
           <Text style={st.homeGreet}>{greet}</Text>
           <Text style={st.homeDate}>{dateStr}</Text>
         </View>
-        <TouchableOpacity onPress={onSettings}
+        <TouchableOpacity onPress={() => setPomoVisible(true)}
           style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8 }}>
-          <Text style={{ fontSize: 20 }}>⚙️</Text>
+          <Text style={{ fontSize: 20 }}>⏱</Text>
         </TouchableOpacity>
       </View>
 
@@ -778,8 +764,7 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
 
       </ScrollView>
 
-      {/* Pomodoro FAB */}
-      <PomodoroTimer />
+      <PomodoroTimer visible={pomoVisible} onClose={() => setPomoVisible(false)} />
 
       {/* Checkin Modal */}
       <Modal visible={showCheckin} animationType="slide" transparent={false} onRequestClose={closeCheckin}>
@@ -1195,7 +1180,6 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={st.topBar}>
         <Text style={st.screenTitle}>🎯 Мои цели</Text>
-        <TouchableOpacity onPress={onSettings}><Text style={st.icon}>⚙️</Text></TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={st.content}>
 
