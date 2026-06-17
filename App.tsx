@@ -13,17 +13,21 @@ import { CITIES, City, getCityTime } from './constants/cities';
 type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
 // ─── Speech Recognition ───────────────────────────────────────────────────────
-function useSpeech(onResult: (text: string) => void) {
+function useSpeech(
+  onResult: (text: string) => void,
+  opts?: { onStart?: () => void; onInterim?: (text: string) => void },
+) {
   const [listening, setListening] = useState(false);
-  const recRef = useRef<any>(null);
-  const pulse = useRef(new Animated.Value(1)).current;
+  const recRef     = useRef<any>(null);
+  const finalAccum = useRef('');
+  const pulse      = useRef(new Animated.Value(1)).current;
 
   useEffect(() => {
     if (listening) {
       Animated.loop(
         Animated.sequence([
-          Animated.timing(pulse, { toValue: 1.3, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
-          Animated.timing(pulse, { toValue: 1,   duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1.3, duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1,   duration: 500, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
         ])
       ).start();
     } else {
@@ -35,35 +39,73 @@ function useSpeech(onResult: (text: string) => void) {
   const start = useCallback(() => {
     const SR = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
     if (!SR) {
-      Alert.alert('Не поддерживается', 'Голосовой ввод работает в Chrome и Яндекс браузере.');
+      Alert.alert('Не поддерживается', 'Голосовой ввод работает в Chrome или Яндекс браузере.');
       return;
     }
     const rec = new SR();
-    rec.lang = 'ru-RU';
-    rec.continuous = false;
-    rec.interimResults = false;
-    rec.onstart  = () => setListening(true);
-    rec.onend    = () => setListening(false);
-    rec.onerror  = () => setListening(false);
-    rec.onresult = (e: any) => {
-      const text = e.results[0][0].transcript;
-      onResult(text);
+    rec.lang           = 'ru-RU';
+    rec.continuous     = true;   // не останавливаться на паузах
+    rec.interimResults = true;   // промежуточные результаты для превью
+    rec.maxAlternatives = 1;
+
+    rec.onstart = () => {
+      finalAccum.current = '';
+      setListening(true);
+      opts?.onStart?.();
     };
+
+    rec.onresult = (e: any) => {
+      let finals  = '';
+      let interim = '';
+      // собираем ВСЕ куски, не только первый
+      for (let i = 0; i < e.results.length; i++) {
+        if (e.results[i].isFinal) finals  += e.results[i][0].transcript + ' ';
+        else                       interim += e.results[i][0].transcript;
+      }
+      finalAccum.current = finals;
+      opts?.onInterim?.(finals + interim);
+    };
+
+    rec.onend = () => {
+      setListening(false);
+      const result = finalAccum.current.trim();
+      if (result) onResult(result);
+      finalAccum.current = '';
+    };
+
+    rec.onerror = (e: any) => {
+      // 'no-speech' — нормальная пауза, не останавливаем запись
+      if (e.error === 'no-speech') return;
+      setListening(false);
+      const result = finalAccum.current.trim();
+      if (result) onResult(result);
+      finalAccum.current = '';
+    };
+
     rec.start();
     recRef.current = rec;
-  }, [onResult]);
+  }, [onResult, opts]);
 
   const stop = useCallback(() => {
-    recRef.current?.stop();
-    setListening(false);
+    recRef.current?.stop(); // onend сам доставит результат
   }, []);
 
   return { listening, start, stop, pulse };
 }
 
 // ─── Mic Button ───────────────────────────────────────────────────────────────
-function MicButton({ onText }: { onText: (t: string) => void }) {
-  const { listening, start, stop, pulse } = useSpeech(onText);
+function MicButton({
+  onText,
+  onStart,
+  onInterim,
+}: {
+  onText: (t: string) => void;
+  onStart?: () => void;
+  onInterim?: (t: string) => void;
+}) {
+  const opts = useRef({ onStart, onInterim });
+  opts.current = { onStart, onInterim };
+  const { listening, start, stop, pulse } = useSpeech(onText, opts.current);
   return (
     <TouchableOpacity onPress={listening ? stop : start} activeOpacity={0.8}>
       <Animated.View style={[st.micBtn, listening && st.micBtnActive, { transform: [{ scale: pulse }] }]}>
@@ -367,7 +409,8 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
   const [quickWin,    setQuickWin]    = useState('');
   const [weekDone,    setWeekDone]    = useState(0);
   const [topStreak,   setTopStreak]   = useState(0);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef    = useRef<ScrollView>(null);
+  const voiceBaseRef = useRef('');
 
   const h       = new Date().getHours();
   const greet   = h < 5 ? 'Доброй ночи 🌙' : h < 12 ? 'Доброе утро ☀️' : h < 17 ? 'Добрый день 🌤' : 'Добрый вечер 🌙';
@@ -694,7 +737,11 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
           </ScrollView>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={st.inputRow}>
-              <MicButton onText={t => setInput(prev => prev ? prev + ' ' + t : t)} />
+              <MicButton
+                onStart={() => { voiceBaseRef.current = input; }}
+                onInterim={t => setInput(voiceBaseRef.current + (voiceBaseRef.current && t ? ' ' : '') + t)}
+                onText={t => setInput(voiceBaseRef.current + (voiceBaseRef.current && t ? ' ' : '') + t)}
+              />
               <TextInput style={st.chatInput} value={input} onChangeText={setInput}
                 placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline />
               <TouchableOpacity
@@ -715,7 +762,8 @@ function ChatScreen() {
   const [msgs, setMsgs] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
-  const scrollRef = useRef<ScrollView>(null);
+  const scrollRef    = useRef<ScrollView>(null);
+  const voiceBaseRef = useRef('');
 
   useEffect(() => {
     storage.getHistory().then(h =>
@@ -777,7 +825,11 @@ function ChatScreen() {
           </ScrollView>
         )}
         <View style={st.inputRow}>
-          <MicButton onText={t => setInput(prev => prev ? prev + ' ' + t : t)} />
+          <MicButton
+            onStart={() => { voiceBaseRef.current = input; }}
+            onInterim={t => setInput(voiceBaseRef.current + (voiceBaseRef.current && t ? ' ' : '') + t)}
+            onText={t => setInput(voiceBaseRef.current + (voiceBaseRef.current && t ? ' ' : '') + t)}
+          />
           <TextInput style={st.chatInput} value={input} onChangeText={setInput}
             placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline maxLength={1000} />
           <TouchableOpacity
