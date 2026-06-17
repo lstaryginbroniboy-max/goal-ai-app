@@ -657,15 +657,15 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
 
 // ─── Root App ─────────────────────────────────────────────────────────────────
 const TABS: { key: Screen; label: string; emoji: string }[] = [
-  { key: 'home',  label: 'Главная', emoji: '🏠' },
-  { key: 'chat',  label: 'Коуч',    emoji: '💬' },
-  { key: 'goals', label: 'Цели',    emoji: '🎯' },
+  { key: 'home',     label: 'Главная',   emoji: '🏠' },
+  { key: 'chat',     label: 'Коуч',      emoji: '💬' },
+  { key: 'goals',    label: 'Цели',      emoji: '🎯' },
+  { key: 'settings', label: 'Настройки', emoji: '⚙️' },
 ];
 
 export default function App() {
   const [screen, setScreen] = useState<Screen | null>(null);
   const [tab, setTab] = useState<Screen>('home');
-  const [prevTab, setPrevTab] = useState<Screen>('home');
 
   useEffect(() => {
     storage.isOnboarded().then(done => setScreen(done ? 'home' : 'onboarding'));
@@ -684,28 +684,16 @@ export default function App() {
     return <OnboardingScreen onDone={() => { setTab('home'); setScreen('home'); }} />;
   }
 
-  if (screen === 'settings') {
-    return (
-      <SafeAreaView style={st.safe}>
-        <StatusBar style="dark" />
-        <SettingsScreen
-          onBack={() => setScreen(prevTab)}
-          onReset={() => { setTab('home'); setScreen('onboarding'); }}
-        />
-      </SafeAreaView>
-    );
-  }
-
-  function goSettings() { setPrevTab(tab); setScreen('settings'); }
   function goTab(t: Screen) { setTab(t); setScreen(t); }
 
   return (
     <SafeAreaView style={st.safe}>
       <StatusBar style="dark" />
       <View style={{ flex: 1 }}>
-        {tab === 'home'  && <HomeScreen onSettings={goSettings} />}
-        {tab === 'chat'  && <ChatScreen />}
-        {tab === 'goals' && <GoalsScreen onSettings={goSettings} />}
+        {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} />}
+        {tab === 'chat'     && <ChatScreen />}
+        {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
+        {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
       </View>
       <View style={st.tabBar}>
         {TABS.map(t => (
