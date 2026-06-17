@@ -1783,11 +1783,13 @@ const TABS: { key: Screen; label: string; emoji: string }[] = [
 ];
 
 export default function App() {
-  const [screen, setScreen] = useState<Screen | null>(null);
-  const [tab, setTab] = useState<Screen>('home');
+  const [screen,         setScreen]         = useState<Screen | null>(null);
+  const [tab,            setTab]            = useState<Screen>('home');
+  const [activeProvider, setActiveProvider] = useState<string>('groq');
 
   useEffect(() => {
     storage.isOnboarded().then(done => setScreen(done ? 'home' : 'onboarding'));
+    storage.getProviderSettings().then(ps => setActiveProvider(ps.activeProvider));
   }, []);
 
   if (screen === null) {
@@ -1803,7 +1805,14 @@ export default function App() {
     return <OnboardingScreen onDone={() => { setTab('home'); setScreen('home'); }} />;
   }
 
-  function goTab(t: Screen) { setTab(t); setScreen(t); }
+  function goTab(t: Screen) {
+    // При уходе из настроек — перечитываем активный провайдер
+    if (tab === 'settings') {
+      storage.getProviderSettings().then(ps => setActiveProvider(ps.activeProvider));
+    }
+    setTab(t);
+    setScreen(t);
+  }
 
   return (
     <SafeAreaView style={st.safe}>
@@ -1814,7 +1823,7 @@ export default function App() {
         <>
           <View style={{ flex: 1 }}>
             {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} />}
-            {tab === 'chat'     && <ChatScreen />}
+            {tab === 'chat'     && <ChatScreen key={activeProvider} />}
             {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
             {tab === 'habits'   && <HabitsScreen />}
             {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
