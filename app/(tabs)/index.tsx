@@ -15,6 +15,13 @@ export default function HomeScreen() {
   const router = useRouter();
   const [tasks, setTasks] = useState<Task[]>([]);
   const [showCheckin, setShowCheckin] = useState(false);
+
+  // Redirect to onboarding if not set up yet
+  useEffect(() => {
+    storage.isOnboarded().then(onboarded => {
+      if (!onboarded) router.replace('/onboarding');
+    });
+  }, []);
   const [checkinMessages, setCheckinMessages] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [checkinInput, setCheckinInput] = useState('');
   const [checkinLoading, setCheckinLoading] = useState(false);
