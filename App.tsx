@@ -199,7 +199,7 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
 
   return (
     <SafeAreaView style={st.safe}>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'android' ? undefined : 'padding'}>
         <ScrollView contentContainerStyle={st.obWrap} keyboardShouldPersistTaps="handled">
 
           {/* Progress dots */}
@@ -818,7 +818,7 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
               </View>
             )}
           </ScrollView>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'android' ? undefined : 'padding'}>
             <View style={st.inputRow}>
               <MicButton
                 onStart={() => { voiceBaseRef.current = input; }}
@@ -898,7 +898,7 @@ function ChatScreen() {
           </TouchableOpacity>
         )}
       </View>
-      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
+      <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'android' ? undefined : 'padding'} keyboardVerticalOffset={80}>
         {msgs.length === 0 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
             <Text style={{ fontSize: 56, marginBottom: 16 }}>💬</Text>
@@ -1110,7 +1110,7 @@ function HabitsScreen() {
       {/* Add habit modal */}
       <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
-          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'android' ? undefined : 'padding'}>
             <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
                 <Text style={st.modalTitle}>Новая привычка</Text>

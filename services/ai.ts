@@ -1,4 +1,3 @@
-import axios from 'axios';
 import { storage, ProviderId } from './storage';
 import { SYSTEM_PROMPT } from '../constants/prompts';
 import { getCityTime } from '../constants/cities';
@@ -99,40 +98,71 @@ export const PROVIDERS: ProviderInfo[] = [
   },
 ];
 
-async function callOpenAI(url: string, apiKey: string, model: string, messages: { role: string; content: string }[], extraHeaders?: Record<string, string>): Promise<string> {
-  const response = await axios.post(url, {
-    model,
-    messages,
-    temperature: 0.7,
-    max_tokens: 1000,
-  }, {
+// Native fetch — работает на всех мобильных браузерах без CORS-проблем XMLHttpRequest
+async function callOpenAI(
+  url: string,
+  apiKey: string,
+  model: string,
+  messages: { role: string; content: string }[],
+  extraHeaders?: Record<string, string>,
+): Promise<string> {
+  const res = await fetch(url, {
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${apiKey}`,
       'Content-Type': 'application/json',
       ...extraHeaders,
     },
-    timeout: 30000,
+    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 1000 }),
+    signal: AbortSignal.timeout(45000),
   });
-  return response.data.choices[0].message.content as string;
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw { response: { status: res.status, data: errBody } };
+  }
+
+  const data = await res.json();
+  return data.choices[0].message.content as string;
 }
 
-async function callYandex(apiKey: string, model: string, messages: { role: string; content: string }[]): Promise<string> {
-  const response = await axios.post('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
-    modelUri: `gpt://${model}/latest`,
-    completionOptions: { temperature: 0.7, maxTokens: 1000 },
-    messages: messages.map(m => ({ role: m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user', text: m.content })),
-  }, {
-    headers: { 'Authorization': `Api-Key ${apiKey}`, 'Content-Type': 'application/json' },
-    timeout: 30000,
+async function callYandex(
+  apiKey: string,
+  model: string,
+  messages: { role: string; content: string }[],
+): Promise<string> {
+  const res = await fetch('https://llm.api.cloud.yandex.net/foundationModels/v1/completion', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Api-Key ${apiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      modelUri: `gpt://${model}/latest`,
+      completionOptions: { temperature: 0.7, maxTokens: 1000 },
+      messages: messages.map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : m.role === 'system' ? 'system' : 'user',
+        text: m.content,
+      })),
+    }),
+    signal: AbortSignal.timeout(45000),
   });
-  return response.data.result.alternatives[0].message.text as string;
+
+  if (!res.ok) {
+    const errBody = await res.json().catch(() => ({}));
+    throw { response: { status: res.status, data: errBody } };
+  }
+
+  const data = await res.json();
+  return data.result.alternatives[0].message.text as string;
 }
 
 function errorMessage(err: any): string {
   if (err.response?.status === 401) return 'Неверный API ключ. Проверь ключ в настройках ⚙️';
   if (err.response?.status === 429) return 'Превышен лимит запросов. Подожди минуту и попробуй снова.';
   if (err.response?.status === 403) return 'Доступ запрещён. Проверь права API ключа.';
-  return `Ошибка: ${err.message}. Проверь интернет и ключ в настройках ⚙️`;
+  if (err.name === 'TimeoutError' || err.name === 'AbortError') return 'Время ожидания вышло. Проверь интернет и попробуй снова.';
+  return `Ошибка соединения: ${err.message || 'нет ответа от сервера'}. Проверь VPN и интернет.`;
 }
 
 async function getActiveConfig() {
