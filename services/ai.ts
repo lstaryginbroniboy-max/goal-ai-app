@@ -23,10 +23,10 @@ export const PROVIDERS: ProviderInfo[] = [
     badgeColor: '#D1FAE5',
     desc: 'console.groq.com',
     url: 'https://api.groq.com/openai/v1/chat/completions',
-    defaultModel: 'llama-3.3-70b-versatile',
+    defaultModel: 'llama-3.1-8b-instant',
     models: [
-      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (лучший)' },
-      { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B (быстрый)' },
+      { id: 'llama-3.1-8b-instant',    label: 'Llama 3.1 8B (быстрый, без лимитов)' },
+      { id: 'llama-3.3-70b-versatile', label: 'Llama 3.3 70B (умнее, лимит 6к/мин)' },
       { id: 'gemma2-9b-it',            label: 'Gemma 2 9B' },
       { id: 'mixtral-8x7b-32768',      label: 'Mixtral 8x7B' },
     ],
@@ -113,7 +113,7 @@ async function callOpenAI(
       'Content-Type': 'application/json',
       ...extraHeaders,
     },
-    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 1000 }),
+    body: JSON.stringify({ model, messages, temperature: 0.7, max_tokens: 600 }),
     signal: AbortSignal.timeout(45000),
   });
 
@@ -189,7 +189,7 @@ export async function sendMessage(userText: string): Promise<string> {
   const history = await storage.getHistory();
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...history.filter(m => m.role !== 'system').slice(-20).map(m => ({ role: m.role, content: m.content })),
+    ...history.filter(m => m.role !== 'system').slice(-8).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: userText },
   ];
 
@@ -218,7 +218,7 @@ export async function sendSystemMessage(systemContent: string): Promise<string> 
   const history = await storage.getHistory();
   const messages = [
     { role: 'system', content: systemPrompt },
-    ...history.filter(m => m.role !== 'system').slice(-10).map(m => ({ role: m.role, content: m.content })),
+    ...history.filter(m => m.role !== 'system').slice(-6).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: systemContent },
   ];
 
