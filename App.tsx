@@ -531,6 +531,24 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
         )}
       </View>
 
+      {/* ── Quick action bar ── */}
+      <View style={st.actionBar}>
+        <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('daily')}>
+          <Text style={{ fontSize: 18 }}>☀️</Text>
+          <Text style={st.actionBarLabel}>Чек-ин</Text>
+        </TouchableOpacity>
+        <View style={st.actionBarDivider} />
+        <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('evening')}>
+          <Text style={{ fontSize: 18 }}>🌙</Text>
+          <Text style={st.actionBarLabel}>Вечер</Text>
+        </TouchableOpacity>
+        <View style={st.actionBarDivider} />
+        <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('weekly')}>
+          <Text style={{ fontSize: 18 }}>📊</Text>
+          <Text style={st.actionBarLabel}>Неделя</Text>
+        </TouchableOpacity>
+      </View>
+
       <ScrollView contentContainerStyle={[st.content, { paddingBottom: 80 }]}>
         {!hasKey && (
           <TouchableOpacity style={st.warnCard} onPress={onSettings}>
@@ -636,37 +654,23 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
           </View>
         )}
 
-        {/* Actions row */}
-        <Text style={[st.sectionLabel, { marginTop: 8 }]}>Действия</Text>
-        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
-          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#EEF2FF' }]}
-            onPress={() => openCheckin('weekly')}>
-            <Text style={{ fontSize: 22 }}>📊</Text>
-            <Text style={[st.actionBtnText, { color: '#4F46E5' }]}>Разбор{'\n'}недели</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#FDF4FF' }]}
-            onPress={() => openCheckin('evening')}>
-            <Text style={{ fontSize: 22 }}>🌙</Text>
-            <Text style={[st.actionBtnText, { color: '#7C3AED' }]}>Вечерний{'\n'}ритуал</Text>
-          </TouchableOpacity>
-          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#FEF3C7' }]}
-            onPress={() => openCheckin('daily')}>
-            <Text style={{ fontSize: 22 }}>☀️</Text>
-            <Text style={[st.actionBtnText, { color: '#D97706' }]}>Утренний{'\n'}чек-ин</Text>
-          </TouchableOpacity>
-        </View>
       </ScrollView>
 
       {/* Pomodoro FAB */}
       <PomodoroTimer />
 
       {/* Checkin Modal */}
-      <Modal visible={showCheckin} animationType="slide" presentationStyle="pageSheet">
+      <Modal visible={showCheckin} animationType="slide" transparent={false} onRequestClose={closeCheckin}>
         <SafeAreaView style={st.safe}>
-          <View style={st.modalHeader}>
-            <Text style={st.modalTitle}>{checkinTitle[checkinType]}</Text>
-            <TouchableOpacity onPress={closeCheckin}>
-              <Text style={{ color: '#4F46E5', fontWeight: '600', fontSize: 16 }}>Готово</Text>
+          <View style={[st.modalHeader, { backgroundColor: '#4F46E5' }]}>
+            <TouchableOpacity onPress={closeCheckin} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+              <Text style={{ color: '#fff', fontSize: 20 }}>←</Text>
+              <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15 }}>Назад</Text>
+            </TouchableOpacity>
+            <Text style={[st.modalTitle, { color: '#fff', fontSize: 16 }]}>{checkinTitle[checkinType]}</Text>
+            <TouchableOpacity onPress={closeCheckin}
+              style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6 }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>Готово</Text>
             </TouchableOpacity>
           </View>
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 20 }}>
@@ -1497,7 +1501,12 @@ const st = StyleSheet.create({
   statLabel:    { fontSize: 10, color: '#6B7280', marginTop: 2, textAlign: 'center', fontWeight: '500' },
   // Section pill
   sectionPill:  { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 8 },
-  // Action buttons
+  // Action bar
+  actionBar:       { flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', shadowColor: '#000', shadowOpacity: 0.06, shadowRadius: 4, shadowOffset: { width: 0, height: 2 }, elevation: 3 },
+  actionBarBtn:    { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 12, gap: 3 },
+  actionBarLabel:  { fontSize: 11, fontWeight: '700', color: '#374151' },
+  actionBarDivider:{ width: 1, backgroundColor: '#E5E7EB', marginVertical: 8 },
+  // Action buttons (legacy, keep for other screens)
   actionBtn:    { flex: 1, borderRadius: 16, padding: 14, alignItems: 'center', gap: 6 },
   actionBtnText:{ fontSize: 12, fontWeight: '700', textAlign: 'center' },
   // Onboarding
