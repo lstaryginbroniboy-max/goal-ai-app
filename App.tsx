@@ -10,7 +10,7 @@ import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT, QUICK_WIN_PROMPT } from './constants/prompts';
 import { CITIES, City, getCityTime } from './constants/cities';
 
-type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding';
+type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
 // ─── Speech Recognition ───────────────────────────────────────────────────────
 function useSpeech(onResult: (text: string) => void) {
@@ -354,7 +354,7 @@ const MOOD_EMOJIS   = ['😞', '😕', '😐', '😊', '🤩'];
 const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
 type CheckinType = 'daily' | 'weekly' | 'evening';
 
-function HomeScreen({ onSettings }: { onSettings: () => void }) {
+function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: () => void }) {
   const [tasks,       setTasks]       = useState<Task[]>([]);
   const [hasKey,      setHasKey]      = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
@@ -546,6 +546,11 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
         <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('weekly')}>
           <Text style={{ fontSize: 18 }}>📊</Text>
           <Text style={st.actionBarLabel}>Неделя</Text>
+        </TouchableOpacity>
+        <View style={st.actionBarDivider} />
+        <TouchableOpacity style={st.actionBarBtn} onPress={onStats}>
+          <Text style={{ fontSize: 18 }}>📈</Text>
+          <Text style={st.actionBarLabel}>Прогресс</Text>
         </TouchableOpacity>
       </View>
 
@@ -1433,6 +1438,266 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
   );
 }
 
+// ─── Statistics ───────────────────────────────────────────────────────────────
+function StatsScreen({ onBack }: { onBack: () => void }) {
+  const [tasks,  setTasks]  = useState<Task[]>([]);
+  const [moods,  setMoods]  = useState<MoodEntry[]>([]);
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [logs,   setLogs]   = useState<HabitLog[]>([]);
+
+  useEffect(() => {
+    Promise.all([
+      storage.getTasks(),
+      storage.getMoodEntries(),
+      storage.getHabits(),
+      storage.getHabitLogs(),
+    ]).then(([t, m, h, l]) => {
+      setTasks(t); setMoods(m); setHabits(h); setLogs(l);
+    });
+  }, []);
+
+  // Build last N days as YYYY-MM-DD strings
+  function buildDays(n: number) {
+    return Array.from({ length: n }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - (n - 1 - i));
+      return d.toISOString().split('T')[0];
+    });
+  }
+
+  const days14 = buildDays(14);
+  const days30 = buildDays(30);
+
+  // Per-day data for 14 days
+  const dayData = days14.map(ds => {
+    const d = new Date(ds + 'T00:00:00');
+    const dayTasks = tasks.filter(t => t.date === ds);
+    const done  = dayTasks.filter(t => t.done).length;
+    const total = dayTasks.length;
+    const mood  = moods.find(m => m.date === ds);
+    const dayNum = d.getDate();
+    const dayLabel = d.toLocaleDateString('ru-RU', { weekday: 'short' });
+    return { ds, done, total, mood, dayNum, dayLabel };
+  });
+
+  // Summary stats
+  const totalDone   = tasks.filter(t => t.done).length;
+  const month30Done = tasks.filter(t => t.done && days30.includes(t.date)).length;
+  const moodEntries7 = moods.filter(m => days14.slice(-7).includes(m.date));
+  const avgMood = moodEntries7.length ? Math.round(moodEntries7.reduce((s, m) => s + m.mood, 0) / moodEntries7.length) : 0;
+  const bestStreak = habits.reduce((m, h) => Math.max(m, calcStreak(h.id, logs)), 0);
+
+  // Day-of-week performance (last 30 days)
+  const weekdayLabels = ['Вс','Пн','Вт','Ср','Чт','Пт','Сб'];
+  const weekdayStats = weekdayLabels.map((label, d) => {
+    const daysForWeekday = days30.filter(ds => new Date(ds + 'T00:00:00').getDay() === d);
+    const done  = daysForWeekday.reduce((s, ds) => s + tasks.filter(t => t.date === ds && t.done).length, 0);
+    const total = daysForWeekday.reduce((s, ds) => s + tasks.filter(t => t.date === ds).length, 0);
+    return { label, pct: total > 0 ? done / total : 0, done, total };
+  });
+  // Reorder Mon–Sun
+  const weekdayStatsOrdered = [1,2,3,4,5,6,0].map(i => weekdayStats[i]);
+
+  const moodColors = ['#EF4444','#F97316','#EAB308','#22C55E','#10B981'];
+  const energyColors = ['#94A3B8','#60A5FA','#34D399','#FBBF24','#F472B6'];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F0F2FF' }}>
+      {/* Header */}
+      <View style={[st.homeHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+        <TouchableOpacity onPress={onBack} style={{ marginRight: 12,
+          backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
+          <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>← Назад</Text>
+        </TouchableOpacity>
+        <Text style={[st.homeGreet, { flex: 1 }]}>📈 Мой прогресс</Text>
+      </View>
+
+      <ScrollView contentContainerStyle={{ padding: 16, paddingBottom: 40, gap: 16 }}>
+
+        {/* Summary cards */}
+        <View style={{ flexDirection: 'row', gap: 8 }}>
+          <View style={[st.statBox, { backgroundColor: '#EEF2FF', flex: 1 }]}>
+            <Text style={[st.statNum, { color: '#4F46E5' }]}>{totalDone}</Text>
+            <Text style={st.statLabel}>всего задач{'\n'}выполнено</Text>
+          </View>
+          <View style={[st.statBox, { backgroundColor: '#D1FAE5', flex: 1 }]}>
+            <Text style={[st.statNum, { color: '#059669' }]}>{month30Done}</Text>
+            <Text style={st.statLabel}>за 30 дней</Text>
+          </View>
+          <View style={[st.statBox, { backgroundColor: '#FEF3C7', flex: 1 }]}>
+            <Text style={[st.statNum, { color: '#D97706' }]}>
+              {avgMood > 0 ? MOOD_EMOJIS[avgMood - 1] : '—'}
+            </Text>
+            <Text style={st.statLabel}>настроение{'\n'}за неделю</Text>
+          </View>
+          <View style={[st.statBox, { backgroundColor: '#FEE2E2', flex: 1 }]}>
+            <Text style={[st.statNum, { color: '#DC2626' }]}>{bestStreak > 0 ? `🔥${bestStreak}` : '—'}</Text>
+            <Text style={st.statLabel}>лучший{'\n'}стрик</Text>
+          </View>
+        </View>
+
+        {/* Task completion bar chart */}
+        <View style={[st.card, { padding: 16 }]}>
+          <Text style={[st.sectionPill, { marginBottom: 12 }]}>✅ Задачи за 14 дней</Text>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-end', height: 80, gap: 2, marginBottom: 6 }}>
+            {dayData.map((d, i) => {
+              const pct = d.total > 0 ? d.done / d.total : 0;
+              const barH = d.total > 0 ? Math.max(pct * 64, 4) : 0;
+              const color = pct >= 1 ? '#10B981' : pct > 0 ? '#F59E0B' : (d.total > 0 ? '#FEE2E2' : '#E5E7EB');
+              return (
+                <View key={i} style={{ flex: 1, alignItems: 'center' }}>
+                  <View style={{ height: 64, width: '100%', justifyContent: 'flex-end' }}>
+                    {d.total > 0 && (
+                      <View style={{ height: d.total > 0 ? 64 : 0, width: '100%', backgroundColor: '#F3F4F6', borderRadius: 3 }}>
+                        <View style={{ height: barH, width: '100%', backgroundColor: color, borderRadius: 3, position: 'absolute', bottom: 0 }} />
+                      </View>
+                    )}
+                    {d.total === 0 && (
+                      <View style={{ height: 4, width: '100%', backgroundColor: '#E5E7EB', borderRadius: 3 }} />
+                    )}
+                  </View>
+                  <Text style={{ fontSize: 9, color: '#9CA3AF', marginTop: 4 }}>{d.dayNum}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {/* Legend */}
+          <View style={{ flexDirection: 'row', gap: 12, marginTop: 4 }}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#10B981' }} />
+              <Text style={{ fontSize: 11, color: '#6B7280' }}>Все выполнены</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#F59E0B' }} />
+              <Text style={{ fontSize: 11, color: '#6B7280' }}>Частично</Text>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <View style={{ width: 10, height: 10, borderRadius: 2, backgroundColor: '#E5E7EB' }} />
+              <Text style={{ fontSize: 11, color: '#6B7280' }}>Нет задач</Text>
+            </View>
+          </View>
+        </View>
+
+        {/* Mood & Energy chart */}
+        <View style={[st.card, { padding: 16 }]}>
+          <Text style={[st.sectionPill, { marginBottom: 12 }]}>🌡️ Настроение и энергия</Text>
+          {/* Mood row */}
+          <Text style={{ fontSize: 11, color: '#6B7280', marginBottom: 6, fontWeight: '600' }}>Настроение</Text>
+          <View style={{ flexDirection: 'row', marginBottom: 12 }}>
+            {dayData.map((d, i) => {
+              const color = d.mood ? moodColors[d.mood.mood - 1] : '#E5E7EB';
+              const emoji = d.mood ? MOOD_EMOJIS[d.mood.mood - 1] : '';
+              return (
+                <View key={i} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                  <View style={{ width: 20, height: 20, borderRadius: 10, backgroundColor: color,
+                    alignItems: 'center', justifyContent: 'center' }}>
+                    {d.mood ? <Text style={{ fontSize: 11 }}>{emoji}</Text> : null}
+                  </View>
+                  <Text style={{ fontSize: 8, color: '#9CA3AF' }}>{d.dayNum}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {/* Energy row */}
+          <Text style={{ fontSize: 11, color: '#6B7280', marginBottom: 6, fontWeight: '600' }}>Энергия</Text>
+          <View style={{ flexDirection: 'row' }}>
+            {dayData.map((d, i) => {
+              const energyPct = d.mood ? d.mood.energy / 5 : 0;
+              const color = d.mood ? energyColors[d.mood.energy - 1] : '#E5E7EB';
+              return (
+                <View key={i} style={{ flex: 1, alignItems: 'center', gap: 2 }}>
+                  <View style={{ height: 32, width: '80%', justifyContent: 'flex-end' }}>
+                    <View style={{
+                      height: d.mood ? Math.max(energyPct * 28, 3) : 3,
+                      backgroundColor: color, borderRadius: 3
+                    }} />
+                  </View>
+                  <Text style={{ fontSize: 8, color: '#9CA3AF' }}>{d.dayNum}</Text>
+                </View>
+              );
+            })}
+          </View>
+          {moods.length === 0 && (
+            <Text style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center', marginTop: 12 }}>
+              Начни отмечать настроение на главной странице
+            </Text>
+          )}
+        </View>
+
+        {/* Habit heatmap */}
+        {habits.length > 0 && (
+          <View style={[st.card, { padding: 16 }]}>
+            <Text style={[st.sectionPill, { marginBottom: 4 }]}>🔗 Привычки — 30 дней</Text>
+            <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>
+              Каждый квадрат = один день
+            </Text>
+            {habits.map(habit => {
+              const streak = calcStreak(habit.id, logs);
+              return (
+                <View key={habit.id} style={{ marginBottom: 10 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 4 }}>
+                    <Text style={{ fontSize: 16, marginRight: 6 }}>{habit.emoji}</Text>
+                    <Text style={{ fontSize: 13, fontWeight: '600', color: '#111827', flex: 1 }} numberOfLines={1}>
+                      {habit.name}
+                    </Text>
+                    <Text style={{ fontSize: 12, color: '#6B7280' }}>
+                      {streak > 0 ? `🔥 ${streak} д.` : '—'}
+                    </Text>
+                  </View>
+                  <View style={{ flexDirection: 'row', gap: 3, flexWrap: 'nowrap' }}>
+                    {days30.map((ds, i) => {
+                      const done = logs.some(l => l.habitId === habit.id && l.date === ds);
+                      const d = new Date(ds + 'T00:00:00');
+                      const isToday = ds === todayString();
+                      return (
+                        <View key={i} style={{
+                          flex: 1, aspectRatio: 1,
+                          backgroundColor: done ? '#10B981' : '#E5E7EB',
+                          borderRadius: 3,
+                          borderWidth: isToday ? 1 : 0,
+                          borderColor: '#4F46E5',
+                        }} />
+                      );
+                    })}
+                  </View>
+                </View>
+              );
+            })}
+          </View>
+        )}
+
+        {/* Productivity by day of week */}
+        <View style={[st.card, { padding: 16 }]}>
+          <Text style={[st.sectionPill, { marginBottom: 12 }]}>📅 Активность по дням недели</Text>
+          <Text style={{ fontSize: 11, color: '#9CA3AF', marginBottom: 12 }}>За последние 30 дней</Text>
+          {weekdayStatsOrdered.map((day, i) => (
+            <View key={i} style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8, gap: 8 }}>
+              <Text style={{ fontSize: 12, fontWeight: '700', color: '#374151', width: 24 }}>{day.label}</Text>
+              <View style={{ flex: 1, height: 18, backgroundColor: '#F3F4F6', borderRadius: 9, overflow: 'hidden' }}>
+                <View style={{
+                  height: '100%',
+                  width: `${Math.round(day.pct * 100)}%`,
+                  backgroundColor: day.pct >= 0.8 ? '#10B981' : day.pct >= 0.5 ? '#F59E0B' : day.pct > 0 ? '#60A5FA' : '#E5E7EB',
+                  borderRadius: 9,
+                }} />
+              </View>
+              <Text style={{ fontSize: 11, color: '#6B7280', width: 36, textAlign: 'right' }}>
+                {day.total > 0 ? `${Math.round(day.pct * 100)}%` : '—'}
+              </Text>
+            </View>
+          ))}
+          {tasks.length === 0 && (
+            <Text style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center' }}>
+              Задачи появятся после утреннего чек-ина с Максом
+            </Text>
+          )}
+        </View>
+
+      </ScrollView>
+    </View>
+  );
+}
+
 // ─── Root App ─────────────────────────────────────────────────────────────────
 const TABS: { key: Screen; label: string; emoji: string }[] = [
   { key: 'home',     label: 'Главная',   emoji: '🏠' },
@@ -1468,21 +1733,27 @@ export default function App() {
   return (
     <SafeAreaView style={st.safe}>
       <StatusBar style="dark" />
-      <View style={{ flex: 1 }}>
-        {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} />}
-        {tab === 'chat'     && <ChatScreen />}
-        {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
-        {tab === 'habits'   && <HabitsScreen />}
-        {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
-      </View>
-      <View style={st.tabBar}>
-        {TABS.map(t => (
-          <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
-            <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
-            <Text style={[st.tabLabel, tab === t.key && st.tabLabelActive]}>{t.label}</Text>
-          </TouchableOpacity>
-        ))}
-      </View>
+      {screen === 'stats' ? (
+        <StatsScreen onBack={() => { setScreen(tab); }} />
+      ) : (
+        <>
+          <View style={{ flex: 1 }}>
+            {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} />}
+            {tab === 'chat'     && <ChatScreen />}
+            {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
+            {tab === 'habits'   && <HabitsScreen />}
+            {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
+          </View>
+          <View style={st.tabBar}>
+            {TABS.map(t => (
+              <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
+                <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
+                <Text style={[st.tabLabel, tab === t.key && st.tabLabelActive]}>{t.label}</Text>
+              </TouchableOpacity>
+            ))}
+          </View>
+        </>
+      )}
     </SafeAreaView>
   );
 }
