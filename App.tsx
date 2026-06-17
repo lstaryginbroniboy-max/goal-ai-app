@@ -467,7 +467,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
         <View style={st.card}>
           <Text style={st.cardTitle}>ℹ️ О приложении</Text>
           <Text style={{ color: '#6B7280', lineHeight: 22, fontSize: 14 }}>
-            Goal AI Coach — твой персональный ИИ-коуч.{'\n\n'}
+            Лучшая версия себя — твой персональный ИИ-коуч.{'\n\n'}
             Каждый день спрашивает о прогрессе, ставит конкретные задачи и помогает шаг за шагом достигать целей.{'\n\n'}
             История хранится только на твоём устройстве.
           </Text>
