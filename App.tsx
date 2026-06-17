@@ -10,7 +10,7 @@ import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT, QUICK_WIN_PROMPT } from './constants/prompts';
 import { CITIES, City, getCityTime } from './constants/cities';
 
-type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
+type Screen = 'home' | 'todos' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
 // ─── Speech Recognition ───────────────────────────────────────────────────────
 function useSpeech(
@@ -1034,6 +1034,183 @@ function ChatScreen() {
   );
 }
 
+// ─── Todos ────────────────────────────────────────────────────────────────────
+type TodoFilter = 'active' | 'today' | 'done';
+
+function TodosScreen() {
+  const [tasks,    setTasks]    = useState<Task[]>([]);
+  const [editTask, setEditTask] = useState<Task | null>(null);
+  const [isNew,    setIsNew]    = useState(false);
+  const [formText, setFormText] = useState('');
+  const [filter,   setFilter]   = useState<TodoFilter>('active');
+  const today = todayString();
+
+  useEffect(() => { storage.getTasks().then(setTasks); }, []);
+
+  function openAdd() {
+    setFormText(''); setIsNew(true);
+    setEditTask({ id: '', text: '', done: false, date: today });
+  }
+
+  function openEdit(task: Task) {
+    setFormText(task.text); setIsNew(false); setEditTask(task);
+  }
+
+  async function saveTask() {
+    if (!formText.trim()) return;
+    let updated: Task[];
+    if (isNew) {
+      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today }];
+    } else {
+      updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim() } : t);
+    }
+    await storage.saveTasks(updated);
+    setTasks(updated);
+    setEditTask(null);
+  }
+
+  async function toggleTask(id: string) {
+    await storage.toggleTask(id);
+    setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }
+
+  async function deleteTask(id: string) {
+    const doDelete = async () => {
+      const updated = tasks.filter(t => t.id !== id);
+      await storage.saveTasks(updated);
+      setTasks(updated);
+    };
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm('Удалить задачу?')) await doDelete();
+    } else {
+      Alert.alert('Удалить?', '', [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }
+
+  const activeCount = tasks.filter(t => !t.done).length;
+  const todayCount  = tasks.filter(t => t.date === today).length;
+  const doneCount   = tasks.filter(t => t.done).length;
+
+  const filtered = tasks
+    .filter(t => filter === 'active' ? !t.done : filter === 'today' ? t.date === today : t.done)
+    .sort((a, b) => {
+      if (a.done !== b.done) return a.done ? 1 : -1;
+      return b.date.localeCompare(a.date);
+    });
+
+  const FILTERS: [TodoFilter, string][] = [
+    ['active', `Активные · ${activeCount}`],
+    ['today',  `Сегодня · ${todayCount}`],
+    ['done',   `Готово · ${doneCount}`],
+  ];
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      <View style={st.topBar}>
+        <Text style={st.screenTitle}>📝 Мои дела</Text>
+        <TouchableOpacity onPress={openAdd}>
+          <Text style={{ fontSize: 30, color: '#4F46E5', lineHeight: 34 }}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      {/* Filter tabs */}
+      <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+        {FILTERS.map(([key, label]) => (
+          <TouchableOpacity key={key} onPress={() => setFilter(key)}
+            style={{ flex: 1, paddingVertical: 11, alignItems: 'center',
+              borderBottomWidth: 2.5, borderBottomColor: filter === key ? '#4F46E5' : 'transparent' }}>
+            <Text style={{ fontSize: 12, fontWeight: filter === key ? '700' : '500',
+              color: filter === key ? '#4F46E5' : '#6B7280' }}>{label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
+
+      <ScrollView contentContainerStyle={[st.content, { gap: 8 }]}>
+        {filtered.length === 0 ? (
+          <View style={[st.card, { alignItems: 'center', paddingVertical: 40 }]}>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>
+              {filter === 'done' ? '🏆' : '📝'}
+            </Text>
+            <Text style={[st.cardTitle, { textAlign: 'center' }]}>
+              {filter === 'done' ? 'Нет выполненных дел' : filter === 'today' ? 'Нет дел на сегодня' : 'Нет активных дел'}
+            </Text>
+            {filter !== 'done' && (
+              <TouchableOpacity style={[st.primaryBtn, { marginTop: 16 }]} onPress={openAdd}>
+                <Text style={st.primaryBtnText}>+ Добавить дело</Text>
+              </TouchableOpacity>
+            )}
+          </View>
+        ) : (
+          filtered.map(task => (
+            <View key={task.id} style={[st.card, { padding: 14 }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+                <TouchableOpacity onPress={() => toggleTask(task.id)}
+                  style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
+                    alignItems: 'center', justifyContent: 'center' },
+                    task.done
+                      ? { backgroundColor: '#4F46E5', borderColor: '#4F46E5' }
+                      : { borderColor: '#D1D5DB' }]}>
+                  {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+                </TouchableOpacity>
+                <View style={{ flex: 1 }}>
+                  <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
+                    textDecorationLine: task.done ? 'line-through' : 'none' }}>
+                    {task.text}
+                  </Text>
+                  <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
+                    {task.date === today ? 'Сегодня' : task.date}
+                  </Text>
+                </View>
+                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+                  {!task.done && (
+                    <TouchableOpacity onPress={() => openEdit(task)}
+                      style={{ padding: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
+                      <Text style={{ fontSize: 15 }}>✏️</Text>
+                    </TouchableOpacity>
+                  )}
+                  <TouchableOpacity onPress={() => deleteTask(task.id)}
+                    style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                    <Text style={{ fontSize: 15 }}>🗑</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          ))
+        )}
+      </ScrollView>
+
+      {/* Add / Edit modal */}
+      <Modal visible={editTask !== null} animationType="slide" transparent onRequestClose={() => setEditTask(null)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'android' ? undefined : 'padding'}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={st.modalTitle}>{isNew ? 'Новое дело' : 'Редактировать'}</Text>
+                <TouchableOpacity onPress={() => setEditTask(null)}>
+                  <Text style={{ fontSize: 22, color: '#6B7280' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <TextInput
+                style={[st.obInput, { marginBottom: 16, minHeight: 80, textAlignVertical: 'top' }]}
+                value={formText} onChangeText={setFormText}
+                placeholder="Что нужно сделать?" placeholderTextColor="#9CA3AF"
+                multiline autoFocus
+              />
+              <TouchableOpacity style={st.primaryBtn} onPress={saveTask}>
+                <Text style={st.primaryBtnText}>{isNew ? 'Добавить' : 'Сохранить'}</Text>
+              </TouchableOpacity>
+              <View style={{ height: 8 }} />
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
+    </View>
+  );
+}
+
 // ─── Habits ───────────────────────────────────────────────────────────────────
 const HABIT_EMOJIS = ['⭐','💪','📚','🏃','🧘','💧','🥗','😴','✍️','🎯','🧠','❤️','🎸','💰','🌿','🚫','📵','🧹','🛁','🙏'];
 const DAY_LABELS   = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
@@ -2013,7 +2190,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
 // ─── Root App ─────────────────────────────────────────────────────────────────
 const TABS: { key: Screen; label: string; emoji: string }[] = [
   { key: 'home',     label: 'Главная',   emoji: '🏠' },
-  { key: 'chat',     label: 'Коуч',      emoji: '💬' },
+  { key: 'todos',    label: 'Дела',      emoji: '📝' },
   { key: 'goals',    label: 'Цели',      emoji: '🎯' },
   { key: 'habits',   label: 'Привычки',  emoji: '🔗' },
   { key: 'settings', label: 'Настройки', emoji: '⚙️' },
@@ -2044,11 +2221,10 @@ export default function App() {
   }
 
   function goTab(t: Screen) {
-    // При уходе из настроек — перечитываем активный провайдер
     if (tab === 'settings') {
       storage.getProviderSettings().then(ps => setActiveProvider(ps.activeProvider));
     }
-    setTab(t);
+    setTab(t as any);
     setScreen(t);
   }
 
@@ -2062,7 +2238,7 @@ export default function App() {
         <>
           <View style={{ flex: 1 }}>
             {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} pomo={pomo} />}
-            {tab === 'chat'     && <ChatScreen key={activeProvider} />}
+            {tab === 'todos'    && <TodosScreen />}
             {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
             {tab === 'habits'   && <HabitsScreen />}
             {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
