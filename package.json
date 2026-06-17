@@ -3,7 +3,7 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
-    "@expo/metro-runtime": "^56.0.15",
+    "@expo/metro-runtime": "~56.0.15",
     "@react-native-async-storage/async-storage": "^3.1.1",
     "axios": "^1.18.0",
     "expo": "~56.0.12",
@@ -12,7 +12,7 @@
     "expo-router": "^56.2.11",
     "expo-status-bar": "~56.0.4",
     "react": "19.2.3",
-    "react-dom": "^19.2.7",
+    "react-dom": "19.2.3",
     "react-native": "0.85.3",
     "react-native-safe-area-context": "^5.8.0",
     "react-native-screens": "^4.25.2",
