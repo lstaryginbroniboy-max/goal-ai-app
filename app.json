@@ -21,17 +21,11 @@
     },
     "web": {
       "bundler": "metro",
-      "output": "static",
+      "output": "single",
       "favicon": "./assets/favicon.png"
     },
     "plugins": [
-      "expo-router",
-      [
-        "@react-native-async-storage/async-storage",
-        {
-          "exclude": ["expo-secure-store"]
-        }
-      ]
+      "expo-router"
     ]
   }
 }
