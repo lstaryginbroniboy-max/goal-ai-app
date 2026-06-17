@@ -80,36 +80,41 @@ const GOAL_LABELS: { key: keyof Goals; emoji: string; title: string }[] = [
   { key: 'fiveYear',emoji: '🚀', title: 'Цели на 5 лет' },
 ];
 
-const ONBOARDING_STEPS = [
-  { key: 'apiKey',  emoji: '🔑', title: 'API Ключ для ИИ',   sub: 'Нужен для работы коуча',      desc: '🟢 Groq — полностью бесплатно\n   console.groq.com  →  ключ gsk_...\n\n🔵 DeepSeek — почти бесплатно\n   platform.deepseek.com  →  ключ sk-...', placeholder: 'gsk_... или sk-...', secure: true,  multi: false },
-  { key: 'fiveYear',emoji: '🚀', title: 'Цели на 5 лет',     sub: 'Кем ты хочешь стать?',        desc: '',  placeholder: 'Каждая цель — отдельная строка', secure: false, multi: true  },
-  { key: 'year',    emoji: '🎯', title: 'Цели на год',        sub: 'Что достичь в этом году?',    desc: '',  placeholder: 'Каждая цель — отдельная строка', secure: false, multi: true  },
-  { key: 'month',   emoji: '📅', title: 'Цели на месяц',      sub: 'Фокус этого месяца?',         desc: '',  placeholder: 'Каждая цель — отдельная строка', secure: false, multi: true  },
-  { key: 'week',    emoji: '📋', title: 'Цели на неделю',     sub: 'Фокус этой недели?',          desc: '',  placeholder: 'Каждая цель — отдельная строка', secure: false, multi: true  },
-  { key: 'day',     emoji: '☀️', title: 'Цели на сегодня',    sub: 'Что важно сделать сегодня?',  desc: '',  placeholder: 'Каждая цель — отдельная строка', secure: false, multi: true  },
+const GOAL_STEPS = [
+  { key: 'fiveYear', emoji: '🚀', title: 'Цели на 5 лет',    sub: 'Кем ты хочешь стать?' },
+  { key: 'year',     emoji: '🎯', title: 'Цели на год',       sub: 'Что достичь в этом году?' },
+  { key: 'month',    emoji: '📅', title: 'Цели на месяц',     sub: 'Фокус этого месяца?' },
+  { key: 'week',     emoji: '📋', title: 'Цели на неделю',    sub: 'Фокус этой недели?' },
+  { key: 'day',      emoji: '☀️', title: 'Цели на сегодня',   sub: 'Что важно сделать сегодня?' },
 ];
 
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 function OnboardingScreen({ onDone }: { onDone: () => void }) {
+  // step 0 = выбор провайдера, 1..5 = цели
   const [step, setStep] = useState(0);
-  const [vals, setVals] = useState<Record<string, string>>(
-    Object.fromEntries(ONBOARDING_STEPS.map(s => [s.key, '']))
+  const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
+  const [apiKey, setApiKey] = useState('');
+  const [goalVals, setGoalVals] = useState<Record<string, string>>(
+    Object.fromEntries(GOAL_STEPS.map(s => [s.key, '']))
   );
-  const cur = ONBOARDING_STEPS[step];
-  const isLast = step === ONBOARDING_STEPS.length - 1;
+  const totalSteps = 1 + GOAL_STEPS.length;
+  const isLast = step === totalSteps - 1;
 
   async function next() {
-    if (cur.key === 'apiKey' && !vals.apiKey.trim()) {
-      Alert.alert('Введи API ключ', 'Это нужно для работы ИИ-коуча'); return;
+    if (step === 0) {
+      if (!selectedProvider) { Alert.alert('Выбери ИИ провайдера'); return; }
+      if (!apiKey.trim()) { Alert.alert('Введи API ключ'); return; }
+      await storage.saveApiKey(apiKey.trim());
+      setStep(1);
+      return;
     }
-    if (step === 0) await storage.saveApiKey(vals.apiKey.trim());
     if (isLast) {
       const goals: Goals = {
-        day:      vals.day.split('\n').map(s => s.trim()).filter(Boolean),
-        week:     vals.week.split('\n').map(s => s.trim()).filter(Boolean),
-        month:    vals.month.split('\n').map(s => s.trim()).filter(Boolean),
-        year:     vals.year.split('\n').map(s => s.trim()).filter(Boolean),
-        fiveYear: vals.fiveYear.split('\n').map(s => s.trim()).filter(Boolean),
+        day:      goalVals.day.split('\n').map(s => s.trim()).filter(Boolean),
+        week:     goalVals.week.split('\n').map(s => s.trim()).filter(Boolean),
+        month:    goalVals.month.split('\n').map(s => s.trim()).filter(Boolean),
+        year:     goalVals.year.split('\n').map(s => s.trim()).filter(Boolean),
+        fiveYear: goalVals.fiveYear.split('\n').map(s => s.trim()).filter(Boolean),
       };
       await storage.saveGoals(goals);
       await storage.setOnboarded();
@@ -119,33 +124,95 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
     }
   }
 
+  const goalStep = step > 0 ? GOAL_STEPS[step - 1] : null;
+
   return (
     <SafeAreaView style={st.safe}>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
         <ScrollView contentContainerStyle={st.obWrap} keyboardShouldPersistTaps="handled">
+
+          {/* Progress dots */}
           <View style={st.dots}>
-            {ONBOARDING_STEPS.map((_, i) => (
+            {Array.from({ length: totalSteps }).map((_, i) => (
               <View key={i} style={[st.dot, i <= step && st.dotActive]} />
             ))}
           </View>
-          <Text style={st.obEmoji}>{cur.emoji}</Text>
-          <Text style={st.obTitle}>{cur.title}</Text>
-          <Text style={st.obSub}>{cur.sub}</Text>
-          {!!cur.desc && (
-            <View style={st.descBox}>
-              <Text style={st.descText}>{cur.desc}</Text>
-            </View>
+
+          {/* ── Step 0: Provider picker ── */}
+          {step === 0 && (
+            <>
+              <Text style={st.obEmoji}>🤖</Text>
+              <Text style={st.obTitle}>Выбери ИИ-помощника</Text>
+              <Text style={st.obSub}>Все варианты поддерживают русский язык</Text>
+
+              {PROVIDERS.map(p => {
+                const isSelected = selectedProvider === p.id;
+                return (
+                  <TouchableOpacity
+                    key={p.id}
+                    style={[st.provCard, isSelected && st.provCardActive]}
+                    onPress={() => { setSelectedProvider(p.id); setApiKey(''); }}
+                    activeOpacity={0.8}
+                  >
+                    <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 6 }}>
+                      <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827', flex: 1 }}>{p.name}</Text>
+                      <View style={[st.badge, { backgroundColor: p.badgeColor }]}>
+                        <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151' }}>{p.badge}</Text>
+                      </View>
+                    </View>
+                    <Text style={{ fontSize: 13, color: '#6B7280' }}>🔗 {p.desc}</Text>
+                    <Text style={{ fontSize: 12, color: '#9CA3AF', marginTop: 2 }}>{p.keyHint}</Text>
+
+                    {isSelected && (
+                      <View style={{ marginTop: 12 }}>
+                        <TextInput
+                          style={[st.obInput, { marginBottom: 0 }]}
+                          value={apiKey}
+                          onChangeText={setApiKey}
+                          placeholder={p.keyPlaceholder}
+                          placeholderTextColor="#9CA3AF"
+                          secureTextEntry
+                          autoCapitalize="none"
+                          autoFocus
+                        />
+                      </View>
+                    )}
+                  </TouchableOpacity>
+                );
+              })}
+
+              <View style={{ height: 8 }} />
+            </>
           )}
-          <TextInput
-            style={[st.obInput, cur.multi && { minHeight: 100, textAlignVertical: 'top' }]}
-            value={vals[cur.key]}
-            onChangeText={v => setVals(p => ({ ...p, [cur.key]: v }))}
-            placeholder={cur.placeholder}
-            placeholderTextColor="#9CA3AF"
-            multiline={cur.multi}
-            secureTextEntry={cur.secure}
-            autoCapitalize="none"
-          />
+
+          {/* ── Steps 1-5: Goals ── */}
+          {goalStep && (
+            <>
+              <Text style={st.obEmoji}>{goalStep.emoji}</Text>
+              <Text style={st.obTitle}>{goalStep.title}</Text>
+              <Text style={st.obSub}>{goalStep.sub}</Text>
+              <View style={st.voiceInputWrap}>
+                <TextInput
+                  style={[st.obInput, { minHeight: 110, textAlignVertical: 'top', flex: 1, marginBottom: 0 }]}
+                  value={goalVals[goalStep.key]}
+                  onChangeText={v => setGoalVals(p => ({ ...p, [goalStep.key]: v }))}
+                  placeholder={'Каждая цель — отдельная строка\nНапример: выучить английский'}
+                  placeholderTextColor="#9CA3AF"
+                  multiline
+                />
+                <View style={{ justifyContent: 'flex-end', paddingLeft: 8, paddingBottom: 4 }}>
+                  <MicButton onText={t => setGoalVals(p => ({
+                    ...p,
+                    [goalStep.key]: p[goalStep.key] ? p[goalStep.key] + '\n' + t : t,
+                  }))} />
+                </View>
+              </View>
+              <Text style={{ color: '#9CA3AF', fontSize: 12, alignSelf: 'flex-start', marginBottom: 8 }}>
+                🎤 Нажми микрофон чтобы надиктовать
+              </Text>
+            </>
+          )}
+
           <TouchableOpacity style={st.primaryBtn} onPress={next}>
             <Text style={st.primaryBtnText}>{isLast ? 'Начать! 🚀' : 'Далее →'}</Text>
           </TouchableOpacity>
@@ -449,12 +516,17 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
             </View>
             {editingKey === key ? (
               <>
-                <TextInput
-                  style={[st.obInput, { minHeight: 90, textAlignVertical: 'top', marginBottom: 8 }]}
-                  value={draft} onChangeText={setDraft} multiline
-                  placeholder="Каждая цель — отдельная строка..." placeholderTextColor="#9CA3AF"
-                />
-                <TouchableOpacity style={st.primaryBtn} onPress={() => saveGoal(key)}>
+                <View style={st.voiceInputWrap}>
+                  <TextInput
+                    style={[st.obInput, { minHeight: 90, textAlignVertical: 'top', marginBottom: 0, flex: 1 }]}
+                    value={draft} onChangeText={setDraft} multiline
+                    placeholder="Каждая цель — отдельная строка..." placeholderTextColor="#9CA3AF"
+                  />
+                  <View style={{ justifyContent: 'flex-end', paddingLeft: 8, paddingBottom: 4 }}>
+                    <MicButton onText={t => setDraft(prev => prev ? prev + '\n' + t : t)} />
+                  </View>
+                </View>
+                <TouchableOpacity style={[st.primaryBtn, { marginTop: 8 }]} onPress={() => saveGoal(key)}>
                   <Text style={st.primaryBtnText}>Сохранить</Text>
                 </TouchableOpacity>
               </>
@@ -769,6 +841,9 @@ const st = StyleSheet.create({
   modalHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#fff' },
   modalTitle:   { fontSize: 18, fontWeight: '700', color: '#111827' },
   // Provider picker
+  provCard:       { backgroundColor: '#fff', borderRadius: 14, borderWidth: 1.5, borderColor: '#E5E7EB', padding: 14, marginBottom: 10, width: '100%' },
+  provCardActive: { borderColor: '#4F46E5', backgroundColor: '#F5F3FF' },
+  voiceInputWrap: { flexDirection: 'row', alignItems: 'stretch', width: '100%', marginBottom: 6 },
   badge:          { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
   fieldLabel:     { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
   fieldHint:      { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
