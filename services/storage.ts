@@ -87,20 +87,32 @@ export const storage = {
     await AsyncStorage.setItem(KEYS.GOALS, JSON.stringify(goals));
   },
 
-  async getHistory(): Promise<Message[]> {
-    const raw = await AsyncStorage.getItem(KEYS.HISTORY);
+  async getHistory(providerId?: ProviderId): Promise<Message[]> {
+    const id = providerId || (await storage.getProviderSettings()).activeProvider;
+    const raw = await AsyncStorage.getItem(`@chat_history_${id}`);
+    // Миграция: старая история Groq лежит в @chat_history
+    if (!raw && id === 'groq') {
+      const legacy = await AsyncStorage.getItem(KEYS.HISTORY);
+      if (legacy) return JSON.parse(legacy);
+    }
     return raw ? JSON.parse(raw) : [];
   },
 
-  async saveHistory(messages: Message[]): Promise<void> {
+  async saveHistory(messages: Message[], providerId?: ProviderId): Promise<void> {
+    const id = providerId || (await storage.getProviderSettings()).activeProvider;
     const trimmed = messages.slice(-100);
-    await AsyncStorage.setItem(KEYS.HISTORY, JSON.stringify(trimmed));
+    await AsyncStorage.setItem(`@chat_history_${id}`, JSON.stringify(trimmed));
   },
 
-  async appendMessage(message: Message): Promise<void> {
-    const history = await storage.getHistory();
+  async clearHistory(providerId?: ProviderId): Promise<void> {
+    const id = providerId || (await storage.getProviderSettings()).activeProvider;
+    await AsyncStorage.removeItem(`@chat_history_${id}`);
+  },
+
+  async appendMessage(message: Message, providerId?: ProviderId): Promise<void> {
+    const history = await storage.getHistory(providerId);
     history.push({ ...message, timestamp: Date.now() });
-    await storage.saveHistory(history);
+    await storage.saveHistory(history, providerId);
   },
 
   async getLastCheckin(): Promise<string | null> {

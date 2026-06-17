@@ -759,13 +759,18 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 function ChatScreen() {
-  const [msgs, setMsgs] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
+  const [msgs,         setMsgs]         = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input,        setInput]        = useState('');
+  const [loading,      setLoading]      = useState(false);
+  const [providerName, setProviderName] = useState('Коуч');
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
 
   useEffect(() => {
+    storage.getProviderSettings().then(ps => {
+      const p = PROVIDERS.find(p => p.id === ps.activeProvider);
+      if (p) setProviderName(p.name);
+    });
     storage.getHistory().then(h =>
       setMsgs(h.filter(m => m.role !== 'system').map(m => ({ role: m.role as 'user' | 'assistant', content: m.content })))
     );
@@ -783,13 +788,31 @@ function ChatScreen() {
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
   }
 
+  async function clearChat() {
+    Alert.alert('Новый диалог', 'Очистить историю переписки с этим ИИ?', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Очистить', style: 'destructive', onPress: async () => {
+        await storage.clearHistory();
+        setMsgs([]);
+      }},
+    ]);
+  }
+
   const CHIPS = ['Дай задачи на сегодня', 'Как достичь моих целей?', 'Мотивируй меня!'];
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-      <View style={st.screenHeader}>
-        <Text style={st.screenTitle}>🤖 Коуч</Text>
-        <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Помогает достигать твоих целей</Text>
+      <View style={[st.screenHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+        <View style={{ flex: 1 }}>
+          <Text style={st.screenTitle}>🤖 {providerName}</Text>
+          <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>Личный коуч · своя история для каждого ИИ</Text>
+        </View>
+        {msgs.length > 0 && (
+          <TouchableOpacity onPress={clearChat}
+            style={{ backgroundColor: '#FEE2E2', borderRadius: 12, paddingHorizontal: 12, paddingVertical: 6 }}>
+            <Text style={{ fontSize: 13, color: '#DC2626', fontWeight: '700' }}>🗑 Новый</Text>
+          </TouchableOpacity>
+        )}
       </View>
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'ios' ? 'padding' : undefined} keyboardVerticalOffset={80}>
         {msgs.length === 0 ? (
