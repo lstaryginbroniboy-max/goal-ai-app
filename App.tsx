@@ -397,18 +397,21 @@ const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
 type CheckinType = 'daily' | 'weekly' | 'evening';
 
 function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: () => void }) {
-  const [tasks,       setTasks]       = useState<Task[]>([]);
-  const [hasKey,      setHasKey]      = useState(false);
-  const [showCheckin, setShowCheckin] = useState(false);
-  const [checkinType, setCheckinType] = useState<CheckinType>('daily');
-  const [msgs,        setMsgs]        = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const [input,       setInput]       = useState('');
-  const [loading,     setLoading]     = useState(false);
-  const [todayMood,   setTodayMood]   = useState<MoodEntry | null>(null);
-  const [draftMood,   setDraftMood]   = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
-  const [quickWin,    setQuickWin]    = useState('');
-  const [weekDone,    setWeekDone]    = useState(0);
-  const [topStreak,   setTopStreak]   = useState(0);
+  const [tasks,          setTasks]          = useState<Task[]>([]);
+  const [hasKey,         setHasKey]         = useState(false);
+  const [showCheckin,    setShowCheckin]    = useState(false);
+  const [checkinType,    setCheckinType]    = useState<CheckinType>('daily');
+  const [msgs,           setMsgs]           = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input,          setInput]          = useState('');
+  const [loading,        setLoading]        = useState(false);
+  const [todayMood,      setTodayMood]      = useState<MoodEntry | null>(null);
+  const [draftMood,      setDraftMood]      = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
+  const [quickWin,       setQuickWin]       = useState('');
+  const [quickWinLoad,   setQuickWinLoad]   = useState(false);
+  const [checkinPending, setCheckinPending] = useState(false);
+  const [weeklyPending,  setWeeklyPending]  = useState(false);
+  const [weekDone,       setWeekDone]       = useState(0);
+  const [topStreak,      setTopStreak]      = useState(0);
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
 
@@ -441,25 +444,27 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
 
     if (!key) return;
 
+    // Проверяем чек-ин — только флаг, без API-запроса
     const lastCheckin = await storage.getLastCheckin();
     if (lastCheckin !== todayString()) {
-      setCheckinType('daily'); setShowCheckin(true); startCheckin('daily'); return;
+      setCheckinPending(true);
     }
 
+    // Проверяем еженедельный разбор — только флаг
     const lastWeekly = await storage.getLastWeeklyReview();
-    if (lastWeekly) {
-      if ((Date.now() - new Date(lastWeekly).getTime()) / 86400000 >= 7) {
-        setCheckinType('weekly'); setShowCheckin(true); startCheckin('weekly');
-      }
-    } else {
+    if (!lastWeekly) {
       await storage.setLastWeeklyReview(todayString());
+    } else if ((Date.now() - new Date(lastWeekly).getTime()) / 86400000 >= 7) {
+      setWeeklyPending(true);
     }
+  }
 
-    // Quick win
+  async function generateQuickWin() {
+    setQuickWinLoad(true);
     const goals = await storage.getGoals();
-    if (goals.day.length || goals.week.length) {
-      sendSystemMessage(QUICK_WIN_PROMPT(goals)).then(r => { if (r) setQuickWin(r.replace(/^⚡\s*/,'').trim()); });
-    }
+    const r = await sendSystemMessage(QUICK_WIN_PROMPT(goals));
+    if (r) setQuickWin(r.replace(/^⚡\s*/, '').trim());
+    setQuickWinLoad(false);
   }
 
   async function startCheckin(type: CheckinType) {
@@ -529,6 +534,8 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
   }
 
   function openCheckin(type: CheckinType) {
+    if (type === 'daily')  setCheckinPending(false);
+    if (type === 'weekly') setWeeklyPending(false);
     setCheckinType(type); setMsgs([]); setShowCheckin(true); startCheckin(type);
   }
 
@@ -604,14 +611,56 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
           </TouchableOpacity>
         )}
 
-        {/* Quick win */}
+        {/* Pending checkin banner */}
+        {checkinPending && hasKey && (
+          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#4F46E5', flexDirection: 'row', alignItems: 'center' }]}
+            onPress={() => openCheckin('daily')}>
+            <Text style={{ fontSize: 24, marginRight: 12 }}>☀️</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: '#4F46E5', fontSize: 14 }}>Начать утренний чек-ин</Text>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Макс ждёт — нажми чтобы начать</Text>
+            </View>
+            <Text style={{ fontSize: 18, color: '#4F46E5' }}>→</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Pending weekly banner */}
+        {weeklyPending && hasKey && (
+          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#7C3AED', flexDirection: 'row', alignItems: 'center' }]}
+            onPress={() => openCheckin('weekly')}>
+            <Text style={{ fontSize: 24, marginRight: 12 }}>📊</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: '#7C3AED', fontSize: 14 }}>Разбор недели готов</Text>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Прошло 7 дней — нажми для анализа</Text>
+            </View>
+            <Text style={{ fontSize: 18, color: '#7C3AED' }}>→</Text>
+          </TouchableOpacity>
+        )}
+
+        {/* Quick win — on demand */}
         {quickWin ? (
           <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}>
             <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginBottom: 6, letterSpacing: 0.5 }}>
               ⚡ БЫСТРАЯ ПОБЕДА · 5 МИН
             </Text>
             <Text style={{ fontSize: 15, color: '#111827', lineHeight: 22 }}>{quickWin}</Text>
+            <TouchableOpacity onPress={() => { setQuickWin(''); }} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
+              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>↺ Другую задачу</Text>
+            </TouchableOpacity>
           </View>
+        ) : hasKey ? (
+          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', flexDirection: 'row', alignItems: 'center' }]}
+            onPress={generateQuickWin} disabled={quickWinLoad}>
+            <Text style={{ fontSize: 24, marginRight: 12 }}>⚡</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: '#D97706', fontSize: 14 }}>Быстрая победа</Text>
+              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Задача на 5 минут от Макса</Text>
+            </View>
+            {quickWinLoad
+              ? <ActivityIndicator color="#D97706" size="small" />
+              : <Text style={{ fontSize: 18, color: '#D97706' }}>→</Text>
+            }
+          </TouchableOpacity>
         ) : null}
 
         {/* Mood tracker */}
