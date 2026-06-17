@@ -7,7 +7,7 @@ import {
 import { StatusBar } from 'expo-status-bar';
 import { storage, Goals, Task, Habit, HabitLog, MoodEntry, Commitment, todayString, ProviderId, ProviderSettings } from './services/storage';
 import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
-import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT, QUICK_WIN_PROMPT } from './constants/prompts';
+import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT } from './constants/prompts';
 import { CITIES, City, getCityTime } from './constants/cities';
 
 type Screen = 'home' | 'todos' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
@@ -433,6 +433,76 @@ function PomodoroModal({ pomo }: { pomo: PomoState }) {
   );
 }
 
+// ─── Daily quotes ─────────────────────────────────────────────────────────────
+const QUOTES: { text: string; author: string }[] = [
+  { text: 'Путь в тысячу миль начинается с первого шага.', author: 'Лао-цзы' },
+  { text: 'Успех — это сумма небольших усилий, повторяемых день за днём.', author: 'Роберт Кольер' },
+  { text: 'Не важно, как медленно ты идёшь, главное — не останавливаться.', author: 'Конфуций' },
+  { text: 'Единственный способ сделать великое дело — любить то, что ты делаешь.', author: 'Стив Джобс' },
+  { text: 'Жизнь — это то, что происходит с тобой, пока ты строишь другие планы.', author: 'Джон Леннон' },
+  { text: 'Неважно, насколько медленно ты движешься, если только ты не останавливаешься.', author: 'Уинстон Черчилль' },
+  { text: 'Стремись не к успеху, а к ценностям, которые он даёт.', author: 'Альберт Эйнштейн' },
+  { text: 'Лучшее время посадить дерево было 20 лет назад. Следующее лучшее время — сейчас.', author: 'Китайская мудрость' },
+  { text: 'Вы никогда не измените свою жизнь, пока не измените что-то, что делаете ежедневно.', author: 'Майк Мурдок' },
+  { text: 'Сделай сегодня то, что другие не хотят делать, и завтра ты будешь жить так, как другие не могут.', author: 'Джаррод Кинц' },
+  { text: 'Мечтай по-крупному и осмеливайся потерпеть неудачу.', author: 'Норман Воан' },
+  { text: 'Никто не может вернуться назад и начать заново, но каждый может начать сейчас и создать новый конец.', author: 'Карл Бард' },
+  { text: 'Поверь в себя и в то, что ты делаешь. Знай, что в тебе есть нечто, что превыше любого препятствия.', author: 'Кристиан Ларсон' },
+  { text: 'Успех — это не конечная точка, неудача — не смертельна. Важна смелость продолжать.', author: 'Уинстон Черчилль' },
+  { text: 'Наша жизнь — это то, что мы делаем из неё.', author: 'Марк Аврелий' },
+  { text: 'Великие дела не делаются силой, ловкостью или быстростой, а только при помощи настойчивости.', author: 'Сэмюэл Джонсон' },
+  { text: 'Препятствие — это то, что видно, когда отводишь глаза от цели.', author: 'Генри Форд' },
+  { text: 'Всё кажется невозможным, пока оно не сделано.', author: 'Нельсон Мандела' },
+  { text: 'Будущее принадлежит тем, кто верит в красоту своей мечты.', author: 'Элеонора Рузвельт' },
+  { text: 'Не жди идеального момента — бери момент и делай его идеальным.', author: 'Зиг Зиглар' },
+  { text: 'Человек становится великим ровно в той мере, в какой он работает для блага своих ближних.', author: 'Махатма Ганди' },
+  { text: 'Дисциплина — это мост между целями и достижениями.', author: 'Джим Рон' },
+  { text: 'Не бойся двигаться медленно. Бойся стоять на месте.', author: 'Китайская мудрость' },
+  { text: 'Ты никогда не провалишься, если никогда не сдашься.', author: 'Альберт Эйнштейн' },
+  { text: 'Чтобы победить, нужно сначала поверить в то, что ты можешь это сделать.', author: 'Ник Фолдс' },
+  { text: 'Секрет достижения результатов — начать.', author: 'Марк Твен' },
+  { text: 'Трудности — это те вещи, которые видишь, когда отводишь взгляд от своей цели.', author: 'Томас Карлейль' },
+  { text: 'Ни одна великая вещь не была достигнута без энтузиазма.', author: 'Ральф Уолдо Эмерсон' },
+  { text: 'Либо ты управляешь своим днём, либо день управляет тобой.', author: 'Джим Рон' },
+  { text: 'Изменить себя — значит изменить мир.', author: 'Лев Толстой' },
+  { text: 'Величайшая слава — не никогда не падать, а подниматься каждый раз, когда падаешь.', author: 'Конфуций' },
+  { text: 'Думай о великих мыслях, но получай удовольствие от маленьких радостей.', author: 'Генри Ван Дайк' },
+  { text: 'Действие — основополагающий ключ к любому успеху.', author: 'Пабло Пикассо' },
+  { text: 'Счастье — это не что-то готовое. Оно приходит от твоих собственных действий.', author: 'Далай-лама' },
+  { text: 'Знание без действия — это безумие. Действие без знания — это опасность.', author: 'Гёте' },
+  { text: 'Верь, что можешь, и ты уже на полпути.', author: 'Теодор Рузвельт' },
+  { text: 'Для тех, кто не знает, куда плыть, ни один ветер не будет попутным.', author: 'Сенека' },
+  { text: 'Те, кто говорит "это невозможно", не должны мешать тем, кто это делает.', author: 'Джордж Бернард Шоу' },
+  { text: 'Каждое утро ты имеешь два выбора: продолжать спать и мечтать, или проснуться и преследовать свои мечты.', author: 'Сократ' },
+  { text: 'Успех — это упасть девять раз и встать десять.', author: 'Бон Джови' },
+  { text: 'Жизнь не в том, чтобы ждать, пока пройдёт буря, а в том, чтобы научиться танцевать под дождём.', author: 'Вивиан Грин' },
+  { text: 'Чем больше я практикую, тем больше мне везёт.', author: 'Гэри Плеер' },
+  { text: 'Сначала они тебя не замечают, потом смеются над тобой, затем борются с тобой. А потом ты побеждаешь.', author: 'Махатма Ганди' },
+  { text: 'Начни там, где ты есть. Используй то, что у тебя есть. Делай то, что можешь.', author: 'Артур Эш' },
+  { text: 'Смелость — это не отсутствие страха, а понимание того, что есть нечто важнее страха.', author: 'Нельсон Мандела' },
+  { text: 'Самое большое открытие моего поколения: человек может изменить свою жизнь, изменив свою позицию.', author: 'Уильям Джеймс' },
+  { text: 'Вы не провалились. Вы только что нашли 10 000 способов, которые не работают.', author: 'Томас Эдисон' },
+  { text: 'Разница между обычным и экстраординарным — это маленькое "экстра".', author: 'Джимми Джонсон' },
+  { text: 'Хочешь узнать, кто ты? Не спрашивай. Действуй! Действие откроет и определит тебя.', author: 'Гёте' },
+  { text: 'Два самых важных дня в твоей жизни — день, когда ты родился, и день, когда ты понял, зачем.', author: 'Марк Твен' },
+  { text: 'Мы — то, что мы делаем постоянно. Совершенство, следовательно, не поступок, а привычка.', author: 'Аристотель' },
+  { text: 'Всё, что ум может задумать и во что может поверить, он способен достичь.', author: 'Наполеон Хилл' },
+  { text: 'Победа — это состояние ума.', author: 'Билл Расселл' },
+  { text: 'Позаботься о своих мыслях, ведь они станут словами. Позаботься о словах, ведь они станут действиями.', author: 'Лао-цзы' },
+  { text: 'Первый шаг к успеху — начать.', author: 'Марк Твен' },
+  { text: 'Ничего великого в мире не было достигнуто без страсти.', author: 'Гегель' },
+  { text: 'Терпение, настойчивость и пот — непобедимая комбинация.', author: 'Наполеон Хилл' },
+  { text: 'Где есть воля, там есть и путь.', author: 'Уильям Блейк' },
+  { text: 'Одно действие стоит тысячи слов.', author: 'Конфуций' },
+  { text: 'Тот, кто двигается вперёд, не стоит на месте.', author: 'Конфуций' },
+  { text: 'Человек, который встаёт, всегда сильнее того, кто остался лежать.', author: 'Ремарк' },
+];
+
+function getTodayQuote() {
+  const dayIndex = Math.floor(Date.now() / 86_400_000);
+  return QUOTES[dayIndex % QUOTES.length];
+}
+
 // ─── Home ─────────────────────────────────────────────────────────────────────
 const MOOD_EMOJIS   = ['😞', '😕', '😐', '😊', '🤩'];
 const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
@@ -448,8 +518,6 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   const [loading,        setLoading]        = useState(false);
   const [todayMood,      setTodayMood]      = useState<MoodEntry | null>(null);
   const [draftMood,      setDraftMood]      = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
-  const [quickWin,       setQuickWin]       = useState('');
-  const [quickWinLoad,   setQuickWinLoad]   = useState(false);
   const [checkinPending, setCheckinPending] = useState(false);
   const [weeklyPending,  setWeeklyPending]  = useState(false);
   const [weekDone,       setWeekDone]       = useState(0);
@@ -502,13 +570,6 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
     }
   }
 
-  async function generateQuickWin() {
-    setQuickWinLoad(true);
-    const goals = await storage.getGoals();
-    const r = await sendSystemMessage(QUICK_WIN_PROMPT(goals));
-    if (r) setQuickWin(r.replace(/^⚡\s*/, '').trim());
-    setQuickWinLoad(false);
-  }
 
   async function startCheckin(type: CheckinType) {
     setLoading(true);
@@ -677,31 +738,20 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           </TouchableOpacity>
         )}
 
-        {/* Quick win — on demand */}
-        {quickWin ? (
-          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginBottom: 6, letterSpacing: 0.5 }}>
-              ⚡ БЫСТРАЯ ПОБЕДА · 5 МИН
+        {/* Daily quote */}
+        {(() => { const q = getTodayQuote(); return (
+          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginBottom: 8, letterSpacing: 0.5 }}>
+              ⚡ ЦИТАТА ДНЯ
             </Text>
-            <Text style={{ fontSize: 15, color: '#111827', lineHeight: 22 }}>{quickWin}</Text>
-            <TouchableOpacity onPress={() => { setQuickWin(''); }} style={{ marginTop: 8, alignSelf: 'flex-start' }}>
-              <Text style={{ fontSize: 12, color: '#9CA3AF' }}>↺ Другую задачу</Text>
-            </TouchableOpacity>
+            <Text style={{ fontSize: 15, color: '#111827', lineHeight: 24, fontStyle: 'italic' }}>
+              «{q.text}»
+            </Text>
+            <Text style={{ fontSize: 13, color: '#B45309', marginTop: 8, fontWeight: '600' }}>
+              — {q.author}
+            </Text>
           </View>
-        ) : hasKey ? (
-          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', flexDirection: 'row', alignItems: 'center' }]}
-            onPress={generateQuickWin} disabled={quickWinLoad}>
-            <Text style={{ fontSize: 24, marginRight: 12 }}>⚡</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: '#D97706', fontSize: 14 }}>Быстрая победа</Text>
-              <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Задача на 5 минут от Макса</Text>
-            </View>
-            {quickWinLoad
-              ? <ActivityIndicator color="#D97706" size="small" />
-              : <Text style={{ fontSize: 18, color: '#D97706' }}>→</Text>
-            }
-          </TouchableOpacity>
-        ) : null}
+        ); })()}
 
         {/* Mood tracker */}
         {!todayMood ? (
