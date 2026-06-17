@@ -1,8 +1,8 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import {
   View, Text, TextInput, TouchableOpacity, ScrollView, StyleSheet,
   Modal, ActivityIndicator, KeyboardAvoidingView, Platform,
-  SafeAreaView, Alert
+  SafeAreaView, Alert, Animated, Easing
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
 import { storage, Goals, Task, todayString, ProviderId, ProviderSettings } from './services/storage';
@@ -10,6 +10,67 @@ import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT } from './constants/prompts';
 
 type Screen = 'home' | 'chat' | 'goals' | 'settings' | 'onboarding';
+
+// ─── Speech Recognition ───────────────────────────────────────────────────────
+function useSpeech(onResult: (text: string) => void) {
+  const [listening, setListening] = useState(false);
+  const recRef = useRef<any>(null);
+  const pulse = useRef(new Animated.Value(1)).current;
+
+  useEffect(() => {
+    if (listening) {
+      Animated.loop(
+        Animated.sequence([
+          Animated.timing(pulse, { toValue: 1.3, duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+          Animated.timing(pulse, { toValue: 1,   duration: 600, easing: Easing.inOut(Easing.ease), useNativeDriver: true }),
+        ])
+      ).start();
+    } else {
+      pulse.stopAnimation();
+      pulse.setValue(1);
+    }
+  }, [listening]);
+
+  const start = useCallback(() => {
+    const SR = (globalThis as any).SpeechRecognition || (globalThis as any).webkitSpeechRecognition;
+    if (!SR) {
+      Alert.alert('Не поддерживается', 'Голосовой ввод работает в Chrome и Яндекс браузере.');
+      return;
+    }
+    const rec = new SR();
+    rec.lang = 'ru-RU';
+    rec.continuous = false;
+    rec.interimResults = false;
+    rec.onstart  = () => setListening(true);
+    rec.onend    = () => setListening(false);
+    rec.onerror  = () => setListening(false);
+    rec.onresult = (e: any) => {
+      const text = e.results[0][0].transcript;
+      onResult(text);
+    };
+    rec.start();
+    recRef.current = rec;
+  }, [onResult]);
+
+  const stop = useCallback(() => {
+    recRef.current?.stop();
+    setListening(false);
+  }, []);
+
+  return { listening, start, stop, pulse };
+}
+
+// ─── Mic Button ───────────────────────────────────────────────────────────────
+function MicButton({ onText }: { onText: (t: string) => void }) {
+  const { listening, start, stop, pulse } = useSpeech(onText);
+  return (
+    <TouchableOpacity onPress={listening ? stop : start} activeOpacity={0.8}>
+      <Animated.View style={[st.micBtn, listening && st.micBtnActive, { transform: [{ scale: pulse }] }]}>
+        <Text style={{ fontSize: 20 }}>{listening ? '⏹' : '🎤'}</Text>
+      </Animated.View>
+    </TouchableOpacity>
+  );
+}
 
 const GOAL_LABELS: { key: keyof Goals; emoji: string; title: string }[] = [
   { key: 'day',     emoji: '☀️', title: 'Цели на сегодня' },
@@ -251,8 +312,9 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
           </ScrollView>
           <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
             <View style={st.inputRow}>
+              <MicButton onText={t => setInput(prev => prev ? prev + ' ' + t : t)} />
               <TextInput style={st.chatInput} value={input} onChangeText={setInput}
-                placeholder="Напиши ответ..." placeholderTextColor="#9CA3AF" multiline />
+                placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline />
               <TouchableOpacity
                 style={[st.sendBtn, (!input.trim() || loading) && { backgroundColor: '#C7D2FE' }]}
                 onPress={sendCheckin} disabled={!input.trim() || loading}>
@@ -333,8 +395,9 @@ function ChatScreen() {
           </ScrollView>
         )}
         <View style={st.inputRow}>
+          <MicButton onText={t => setInput(prev => prev ? prev + ' ' + t : t)} />
           <TextInput style={st.chatInput} value={input} onChangeText={setInput}
-            placeholder="Написать коучу..." placeholderTextColor="#9CA3AF" multiline maxLength={1000} />
+            placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline maxLength={1000} />
           <TouchableOpacity
             style={[st.sendBtn, (!input.trim() || loading) && { backgroundColor: '#C7D2FE' }]}
             onPress={send} disabled={!input.trim() || loading}>
@@ -704,6 +767,9 @@ const st = StyleSheet.create({
   bubbleAI:     { alignSelf: 'flex-start', backgroundColor: '#F3F4F6' },
   bubbleUser:   { alignSelf: 'flex-end', backgroundColor: '#4F46E5' },
   bubbleText:   { flex: 1, fontSize: 15, color: '#111827', lineHeight: 22 },
+  // Mic
+  micBtn:       { width: 40, height: 40, borderRadius: 20, backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center', marginRight: 6 },
+  micBtnActive: { backgroundColor: '#FEE2E2' },
   // Input
   inputRow:     { flexDirection: 'row', padding: 12, borderTopWidth: 1, borderTopColor: '#E5E7EB', backgroundColor: '#fff', alignItems: 'flex-end' },
   chatInput:    { flex: 1, backgroundColor: '#F3F4F6', borderRadius: 22, paddingHorizontal: 16, paddingVertical: 10, fontSize: 15, color: '#111827', maxHeight: 100 },
