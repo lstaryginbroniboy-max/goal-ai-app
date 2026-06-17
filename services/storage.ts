@@ -22,6 +22,23 @@ export interface Task {
   date: string;
 }
 
+export interface Habit {
+  id: string;
+  name: string;
+  emoji: string;
+}
+
+export interface HabitLog {
+  habitId: string;
+  date: string;
+}
+
+export interface MoodEntry {
+  date: string;
+  mood: number;    // 1-5
+  energy: number;  // 1-5
+}
+
 export type ProviderId = 'groq' | 'gemini' | 'openrouter' | 'deepseek' | 'yandex';
 
 export interface ProviderSettings {
@@ -34,11 +51,15 @@ const KEYS = {
   GOALS: '@goals',
   HISTORY: '@chat_history',
   LAST_CHECKIN: '@last_checkin',
+  LAST_WEEKLY: '@last_weekly',
   TASKS: '@tasks',
   ONBOARDED: '@onboarded',
   API_KEY: '@api_key',
   PROVIDER: '@provider_settings',
   CITY: '@city_tz',
+  HABITS: '@habits',
+  HABIT_LOGS: '@habit_logs',
+  MOOD: '@mood_entries',
 };
 
 const DEFAULT_PROVIDER: ProviderSettings = {
@@ -81,6 +102,14 @@ export const storage = {
     await AsyncStorage.setItem(KEYS.LAST_CHECKIN, date);
   },
 
+  async getLastWeeklyReview(): Promise<string | null> {
+    return AsyncStorage.getItem(KEYS.LAST_WEEKLY);
+  },
+
+  async setLastWeeklyReview(date: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.LAST_WEEKLY, date);
+  },
+
   async getTasks(): Promise<Task[]> {
     const raw = await AsyncStorage.getItem(KEYS.TASKS);
     return raw ? JSON.parse(raw) : [];
@@ -105,7 +134,6 @@ export const storage = {
     await AsyncStorage.setItem(KEYS.ONBOARDED, 'true');
   },
 
-  // Legacy single key — used on onboarding step 0
   async getApiKey(): Promise<string | null> {
     const ps = await storage.getProviderSettings();
     const key = ps.keys[ps.activeProvider];
@@ -114,7 +142,6 @@ export const storage = {
 
   async saveApiKey(key: string): Promise<void> {
     await AsyncStorage.setItem(KEYS.API_KEY, key);
-    // Auto-detect provider from key prefix and save
     const provider = detectProvider(key);
     const ps = await storage.getProviderSettings();
     ps.keys[provider] = key;
@@ -125,7 +152,6 @@ export const storage = {
   async getProviderSettings(): Promise<ProviderSettings> {
     const raw = await AsyncStorage.getItem(KEYS.PROVIDER);
     if (!raw) {
-      // Migrate legacy API key
       const legacyKey = await AsyncStorage.getItem(KEYS.API_KEY);
       if (legacyKey) {
         const provider = detectProvider(legacyKey);
@@ -147,6 +173,48 @@ export const storage = {
 
   async saveCity(city: City): Promise<void> {
     await AsyncStorage.setItem(KEYS.CITY, JSON.stringify(city));
+  },
+
+  // ── Habits ─────────────────────────────────────────────────────────────────
+  async getHabits(): Promise<Habit[]> {
+    const raw = await AsyncStorage.getItem(KEYS.HABITS);
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  async saveHabits(habits: Habit[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.HABITS, JSON.stringify(habits));
+  },
+
+  async getHabitLogs(): Promise<HabitLog[]> {
+    const raw = await AsyncStorage.getItem(KEYS.HABIT_LOGS);
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  async toggleHabitLog(habitId: string, date: string): Promise<HabitLog[]> {
+    const logs = await storage.getHabitLogs();
+    const exists = logs.some(l => l.habitId === habitId && l.date === date);
+    const updated = exists
+      ? logs.filter(l => !(l.habitId === habitId && l.date === date))
+      : [...logs, { habitId, date }];
+    await AsyncStorage.setItem(KEYS.HABIT_LOGS, JSON.stringify(updated));
+    return updated;
+  },
+
+  // ── Mood ───────────────────────────────────────────────────────────────────
+  async getMoodEntries(): Promise<MoodEntry[]> {
+    const raw = await AsyncStorage.getItem(KEYS.MOOD);
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  async saveMoodEntry(entry: MoodEntry): Promise<void> {
+    const entries = await storage.getMoodEntries();
+    const filtered = entries.filter(e => e.date !== entry.date);
+    await AsyncStorage.setItem(KEYS.MOOD, JSON.stringify([...filtered, entry]));
+  },
+
+  async getTodayMood(): Promise<MoodEntry | null> {
+    const entries = await storage.getMoodEntries();
+    return entries.find(e => e.date === todayString()) || null;
   },
 
   async clearAll(): Promise<void> {

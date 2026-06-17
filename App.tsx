@@ -5,12 +5,12 @@ import {
   SafeAreaView, Alert, Animated, Easing
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { storage, Goals, Task, todayString, ProviderId, ProviderSettings } from './services/storage';
+import { storage, Goals, Task, Habit, HabitLog, MoodEntry, todayString, ProviderId, ProviderSettings } from './services/storage';
 import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
-import { DAILY_CHECKIN_PROMPT } from './constants/prompts';
+import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT } from './constants/prompts';
 import { CITIES, City, getCityTime } from './constants/cities';
 
-type Screen = 'home' | 'chat' | 'goals' | 'settings' | 'onboarding';
+type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding';
 
 // ─── Speech Recognition ───────────────────────────────────────────────────────
 function useSpeech(onResult: (text: string) => void) {
@@ -233,13 +233,19 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
 }
 
 // ─── Home ─────────────────────────────────────────────────────────────────────
+const MOOD_EMOJIS = ['😞', '😕', '😐', '😊', '🤩'];
+const ENERGY_ICONS = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
+
 function HomeScreen({ onSettings }: { onSettings: () => void }) {
   const [tasks, setTasks] = useState<Task[]>([]);
   const [hasKey, setHasKey] = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
+  const [checkinType, setCheckinType] = useState<'daily' | 'weekly'>('daily');
   const [msgs, setMsgs] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(false);
+  const [todayMood, setTodayMood] = useState<MoodEntry | null>(null);
+  const [draftMood, setDraftMood] = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
   const scrollRef = useRef<ScrollView>(null);
 
   const h = new Date().getHours();
@@ -253,15 +259,47 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
     setHasKey(!!key);
     const all = await storage.getTasks();
     setTasks(all.filter(t => t.date === todayString()));
-    const last = await storage.getLastCheckin();
-    if (last !== todayString() && key) { setShowCheckin(true); startCheckin(); }
+    const mood = await storage.getTodayMood();
+    setTodayMood(mood);
+
+    if (!key) return;
+
+    const lastCheckin = await storage.getLastCheckin();
+    if (lastCheckin !== todayString()) {
+      setCheckinType('daily');
+      setShowCheckin(true);
+      startDailyCheckin();
+      return;
+    }
+
+    // Weekly review: trigger if 7+ days since last review
+    const lastWeekly = await storage.getLastWeeklyReview();
+    if (lastWeekly) {
+      const daysSince = (Date.now() - new Date(lastWeekly).getTime()) / 86400000;
+      if (daysSince >= 7) { setCheckinType('weekly'); setShowCheckin(true); startWeeklyReview(); }
+    } else {
+      // First time — trigger after first daily checkin is done
+      await storage.setLastWeeklyReview(todayString());
+    }
   }
 
-  async function startCheckin() {
+  async function startDailyCheckin() {
     setLoading(true);
     const goals = await storage.getGoals();
     const reply = await sendSystemMessage(DAILY_CHECKIN_PROMPT(goals));
-    setMsgs([{ role: 'assistant', content: reply || 'Привет! Как прошёл вчерашний день? Что успел сделать?' }]);
+    setMsgs([{ role: 'assistant', content: reply || 'Привет! Как прошёл вчерашний день?' }]);
+    setLoading(false);
+  }
+
+  async function startWeeklyReview() {
+    setLoading(true);
+    const goals = await storage.getGoals();
+    const all = await storage.getTasks();
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekTasks = all.filter(t => new Date(t.date) >= weekAgo);
+    const done = weekTasks.filter(t => t.done).length;
+    const reply = await sendSystemMessage(WEEKLY_REVIEW_PROMPT(goals, done, weekTasks.length));
+    setMsgs([{ role: 'assistant', content: reply || 'Привет! Давай разберём твою неделю — что получилось?' }]);
     setLoading(false);
   }
 
@@ -274,7 +312,6 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
     const reply = await sendMessage(text);
     const withReply = [...next, { role: 'assistant' as const, content: reply }];
     setMsgs(withReply); setLoading(false);
-    // Extract tasks
     const lines = reply.split('\n').filter(l => l.match(/✅|^\d+\./));
     if (lines.length) {
       const existing = await storage.getTasks();
@@ -290,12 +327,22 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
   }
 
   async function closeCheckin() {
-    await storage.setLastCheckin(todayString()); setShowCheckin(false);
+    if (checkinType === 'daily') await storage.setLastCheckin(todayString());
+    else await storage.setLastWeeklyReview(todayString());
+    setShowCheckin(false);
+    setMsgs([]);
   }
 
   async function toggleTask(id: string) {
     await storage.toggleTask(id);
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
+  }
+
+  async function saveMood() {
+    if (!draftMood.mood || !draftMood.energy) return;
+    const entry: MoodEntry = { date: todayString(), mood: draftMood.mood, energy: draftMood.energy };
+    await storage.saveMoodEntry(entry);
+    setTodayMood(entry);
   }
 
   const done = tasks.filter(t => t.done).length;
@@ -317,6 +364,51 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
           </TouchableOpacity>
         )}
 
+        {/* Mood tracker */}
+        {todayMood ? (
+          <View style={[st.card, { flexDirection: 'row', alignItems: 'center' }]}>
+            <Text style={{ fontSize: 28, marginRight: 12 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '600', color: '#111827' }}>Настроение сегодня</Text>
+              <Text style={{ color: '#6B7280', fontSize: 13 }}>
+                Настроение: {MOOD_EMOJIS[todayMood.mood - 1]}  ·  Энергия: {ENERGY_ICONS[todayMood.energy - 1]}
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setTodayMood(null)}>
+              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Изменить</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          <View style={st.card}>
+            <Text style={st.cardTitle}>🌡️ Как ты сегодня?</Text>
+            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Настроение</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+              {MOOD_EMOJIS.map((e, i) => (
+                <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, mood: i + 1 }))}
+                  style={{ alignItems: 'center', padding: 6, borderRadius: 12,
+                    backgroundColor: draftMood.mood === i + 1 ? '#EEF2FF' : 'transparent' }}>
+                  <Text style={{ fontSize: 28 }}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Энергия</Text>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+              {ENERGY_ICONS.map((e, i) => (
+                <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, energy: i + 1 }))}
+                  style={{ alignItems: 'center', padding: 6, borderRadius: 12,
+                    backgroundColor: draftMood.energy === i + 1 ? '#EEF2FF' : 'transparent' }}>
+                  <Text style={{ fontSize: 22 }}>{e}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <TouchableOpacity
+              style={[st.primaryBtn, (!draftMood.mood || !draftMood.energy) && { backgroundColor: '#C7D2FE' }]}
+              onPress={saveMood} disabled={!draftMood.mood || !draftMood.energy}>
+              <Text style={st.primaryBtnText}>Сохранить</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
         <View style={st.card}>
           <Text style={st.cardTitle}>Задачи на сегодня</Text>
           <View style={st.progBar}>
@@ -333,7 +425,7 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
               Пройди утренний чек-ин с коучем
             </Text>
             <TouchableOpacity style={st.primaryBtn}
-              onPress={() => { setShowCheckin(true); if (!msgs.length) startCheckin(); }}>
+              onPress={() => { setCheckinType('daily'); setShowCheckin(true); if (!msgs.length) startDailyCheckin(); }}>
               <Text style={st.primaryBtnText}>Начать чек-ин</Text>
             </TouchableOpacity>
           </View>
@@ -358,12 +450,17 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
             <Text style={{ color: '#047857', marginTop: 4 }}>Отличная работа сегодня!</Text>
           </View>
         )}
+
+        <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#F3F4F6', marginTop: 4 }]}
+          onPress={() => { setCheckinType('weekly'); setShowCheckin(true); startWeeklyReview(); }}>
+          <Text style={[st.primaryBtnText, { color: '#4F46E5' }]}>📊 Разбор недели</Text>
+        </TouchableOpacity>
       </ScrollView>
 
       <Modal visible={showCheckin} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={st.safe}>
           <View style={st.modalHeader}>
-            <Text style={st.modalTitle}>☀️ Утренний чек-ин</Text>
+            <Text style={st.modalTitle}>{checkinType === 'daily' ? '☀️ Утренний чек-ин' : '📊 Разбор недели'}</Text>
             <TouchableOpacity onPress={closeCheckin}>
               <Text style={{ color: '#4F46E5', fontWeight: '600', fontSize: 16 }}>Готово</Text>
             </TouchableOpacity>
@@ -477,6 +574,194 @@ function ChatScreen() {
           </TouchableOpacity>
         </View>
       </KeyboardAvoidingView>
+    </View>
+  );
+}
+
+// ─── Habits ───────────────────────────────────────────────────────────────────
+const HABIT_EMOJIS = ['⭐','💪','📚','🏃','🧘','💧','🥗','😴','✍️','🎯','🧠','❤️','🎸','💰','🌿','🚫','📵','🧹','🛁','🙏'];
+
+function calcStreak(habitId: string, logs: HabitLog[]): number {
+  let streak = 0;
+  const d = new Date();
+  for (let i = 0; i < 365; i++) {
+    const ds = d.toISOString().split('T')[0];
+    if (logs.some(l => l.habitId === habitId && l.date === ds)) {
+      streak++;
+      d.setDate(d.getDate() - 1);
+    } else { break; }
+  }
+  return streak;
+}
+
+function getLast14(habitId: string, logs: HabitLog[]): boolean[] {
+  return Array.from({ length: 14 }, (_, i) => {
+    const d = new Date();
+    d.setDate(d.getDate() - (13 - i));
+    return logs.some(l => l.habitId === habitId && l.date === d.toISOString().split('T')[0]);
+  });
+}
+
+function pluralDays(n: number) {
+  if (n === 1) return 'день';
+  if (n < 5) return 'дня';
+  return 'дней';
+}
+
+function HabitsScreen() {
+  const [habits, setHabits] = useState<Habit[]>([]);
+  const [logs, setLogs] = useState<HabitLog[]>([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [newName, setNewName] = useState('');
+  const [newEmoji, setNewEmoji] = useState('⭐');
+  const today = todayString();
+
+  useEffect(() => {
+    Promise.all([storage.getHabits(), storage.getHabitLogs()]).then(([h, l]) => {
+      setHabits(h); setLogs(l);
+    });
+  }, []);
+
+  async function toggleHabit(habitId: string) {
+    const updated = await storage.toggleHabitLog(habitId, today);
+    setLogs(updated);
+  }
+
+  async function addHabit() {
+    if (!newName.trim()) return;
+    const habit: Habit = { id: Date.now().toString(), name: newName.trim(), emoji: newEmoji };
+    const updated = [...habits, habit];
+    await storage.saveHabits(updated);
+    setHabits(updated);
+    setNewName(''); setNewEmoji('⭐'); setShowAdd(false);
+  }
+
+  async function deleteHabit(id: string) {
+    Alert.alert('Удалить привычку?', 'История отметок тоже удалится.', [
+      { text: 'Отмена', style: 'cancel' },
+      { text: 'Удалить', style: 'destructive', onPress: async () => {
+        const updated = habits.filter(h => h.id !== id);
+        await storage.saveHabits(updated);
+        setHabits(updated);
+      }},
+    ]);
+  }
+
+  const todayDone = habits.filter(h => logs.some(l => l.habitId === h.id && l.date === today)).length;
+
+  return (
+    <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
+      <View style={st.topBar}>
+        <Text style={st.screenTitle}>🔗 Привычки</Text>
+        <TouchableOpacity onPress={() => setShowAdd(true)}>
+          <Text style={{ fontSize: 30, color: '#4F46E5', lineHeight: 34 }}>+</Text>
+        </TouchableOpacity>
+      </View>
+
+      <ScrollView contentContainerStyle={[st.content, { gap: 10 }]}>
+        {habits.length > 0 && (
+          <View style={[st.card, { flexDirection: 'row', alignItems: 'center' }]}>
+            <Text style={{ fontSize: 32, marginRight: 12 }}>
+              {todayDone === habits.length ? '🏆' : '🎯'}
+            </Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', fontSize: 16, color: '#111827' }}>
+                {todayDone === habits.length ? 'Все привычки выполнены!' : `Сегодня: ${todayDone} из ${habits.length}`}
+              </Text>
+              <View style={st.progBar}>
+                <View style={[st.progFill, { width: `${habits.length ? (todayDone / habits.length) * 100 : 0}%` as any }]} />
+              </View>
+            </View>
+          </View>
+        )}
+
+        {habits.length === 0 ? (
+          <View style={[st.card, { alignItems: 'center', paddingVertical: 40 }]}>
+            <Text style={{ fontSize: 52, marginBottom: 12 }}>🌱</Text>
+            <Text style={[st.cardTitle, { textAlign: 'center' }]}>Нет привычек</Text>
+            <Text style={{ color: '#6B7280', textAlign: 'center', marginTop: 4, marginBottom: 20 }}>
+              Добавь первую привычку — нажми + вверху
+            </Text>
+            <TouchableOpacity style={st.primaryBtn} onPress={() => setShowAdd(true)}>
+              <Text style={st.primaryBtnText}>+ Добавить привычку</Text>
+            </TouchableOpacity>
+          </View>
+        ) : (
+          habits.map(habit => {
+            const streak = calcStreak(habit.id, logs);
+            const last14 = getLast14(habit.id, logs);
+            const doneToday = logs.some(l => l.habitId === habit.id && l.date === today);
+            return (
+              <View key={habit.id} style={[st.card, doneToday && { borderWidth: 1.5, borderColor: '#10B981' }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+                  <Text style={{ fontSize: 30, marginRight: 12 }}>{habit.emoji}</Text>
+                  <View style={{ flex: 1 }}>
+                    <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{habit.name}</Text>
+                    <Text style={{ fontSize: 13, color: streak > 0 ? '#F59E0B' : '#9CA3AF', marginTop: 2 }}>
+                      {streak > 0 ? `🔥 ${streak} ${pluralDays(streak)} подряд` : 'Начни сегодня!'}
+                    </Text>
+                  </View>
+                  <TouchableOpacity
+                    style={[{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
+                      doneToday ? { backgroundColor: '#D1FAE5' } : { backgroundColor: '#F3F4F6', borderWidth: 2, borderColor: '#E5E7EB' }]}
+                    onPress={() => toggleHabit(habit.id)}>
+                    <Text style={{ fontSize: 22 }}>{doneToday ? '✅' : '◯'}</Text>
+                  </TouchableOpacity>
+                </View>
+                {/* 14-day mini calendar */}
+                <View style={{ flexDirection: 'row', gap: 3, marginBottom: 4 }}>
+                  {last14.map((done, i) => (
+                    <View key={i} style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: done ? '#4F46E5' : '#E5E7EB' }} />
+                  ))}
+                </View>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 11, color: '#9CA3AF' }}>последние 14 дней</Text>
+                  <TouchableOpacity onPress={() => deleteHabit(habit.id)}>
+                    <Text style={{ fontSize: 12, color: '#EF4444' }}>удалить</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          })
+        )}
+      </ScrollView>
+
+      {/* Add habit modal */}
+      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <KeyboardAvoidingView behavior={Platform.OS === 'ios' ? 'padding' : undefined}>
+            <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
+              <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
+                <Text style={st.modalTitle}>Новая привычка</Text>
+                <TouchableOpacity onPress={() => setShowAdd(false)}>
+                  <Text style={{ fontSize: 22, color: '#6B7280' }}>✕</Text>
+                </TouchableOpacity>
+              </View>
+              <Text style={st.fieldLabel}>Иконка</Text>
+              <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
+                {HABIT_EMOJIS.map(e => (
+                  <TouchableOpacity key={e} onPress={() => setNewEmoji(e)}
+                    style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
+                      marginRight: 8, backgroundColor: newEmoji === e ? '#EEF2FF' : '#F3F4F6',
+                      borderWidth: newEmoji === e ? 2 : 0, borderColor: '#4F46E5' }}>
+                    <Text style={{ fontSize: 22 }}>{e}</Text>
+                  </TouchableOpacity>
+                ))}
+              </ScrollView>
+              <Text style={st.fieldLabel}>Название</Text>
+              <TextInput
+                style={[st.obInput, { marginBottom: 16 }]}
+                value={newName} onChangeText={setNewName}
+                placeholder="Например: Пить 2л воды" placeholderTextColor="#9CA3AF" autoFocus
+              />
+              <TouchableOpacity style={st.primaryBtn} onPress={addHabit}>
+                <Text style={st.primaryBtnText}>Добавить привычку</Text>
+              </TouchableOpacity>
+              <View style={{ height: 8 }} />
+            </View>
+          </KeyboardAvoidingView>
+        </View>
+      </Modal>
     </View>
   );
 }
@@ -813,6 +1098,7 @@ const TABS: { key: Screen; label: string; emoji: string }[] = [
   { key: 'home',     label: 'Главная',   emoji: '🏠' },
   { key: 'chat',     label: 'Коуч',      emoji: '💬' },
   { key: 'goals',    label: 'Цели',      emoji: '🎯' },
+  { key: 'habits',   label: 'Привычки',  emoji: '🔗' },
   { key: 'settings', label: 'Настройки', emoji: '⚙️' },
 ];
 
@@ -846,12 +1132,13 @@ export default function App() {
         {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} />}
         {tab === 'chat'     && <ChatScreen />}
         {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
+        {tab === 'habits'   && <HabitsScreen />}
         {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
       </View>
       <View style={st.tabBar}>
         {TABS.map(t => (
           <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
-            <Text style={{ fontSize: 24 }}>{t.emoji}</Text>
+            <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
             <Text style={[st.tabLabel, tab === t.key && st.tabLabelActive]}>{t.label}</Text>
           </TouchableOpacity>
         ))}
@@ -935,6 +1222,6 @@ const st = StyleSheet.create({
   // Tab bar
   tabBar:       { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#fff', height: 62 },
   tabItem:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
-  tabLabel:     { fontSize: 11, color: '#9CA3AF', marginTop: 2, fontWeight: '500' },
+  tabLabel:     { fontSize: 10, color: '#9CA3AF', marginTop: 1, fontWeight: '500' },
   tabLabelActive: { color: '#4F46E5', fontWeight: '700' },
 });
