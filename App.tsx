@@ -298,17 +298,18 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
-// ─── Pomodoro Timer ───────────────────────────────────────────────────────────
+// ─── Pomodoro ─────────────────────────────────────────────────────────────────
 const POMO_PHASES = [
   { name: 'Фокус',  duration: 25 * 60, color: '#4F46E5', bg: '#EEF2FF', emoji: '🎯' },
   { name: 'Пауза',  duration:  5 * 60, color: '#10B981', bg: '#D1FAE5', emoji: '☕' },
 ];
 
-function PomodoroTimer({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+function usePomodoro() {
   const [phase,    setPhase]    = useState(0);
   const [timeLeft, setTimeLeft] = useState(POMO_PHASES[0].duration);
   const [running,  setRunning]  = useState(false);
   const [sessions, setSessions] = useState(0);
+  const [visible,  setVisible]  = useState(false);
   const ivRef = useRef<any>(null);
 
   useEffect(() => {
@@ -334,69 +335,101 @@ function PomodoroTimer({ visible, onClose }: { visible: boolean; onClose: () => 
   const cur  = POMO_PHASES[phase];
   const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
   const secs = (timeLeft % 60).toString().padStart(2, '0');
-  const pct  = ((cur.duration - timeLeft) / cur.duration) * 100;
+
+  return { phase, timeLeft, running, sessions, visible,
+           setVisible, setRunning, setPhase, setTimeLeft, setSessions, cur, mins, secs };
+}
+
+type PomoState = ReturnType<typeof usePomodoro>;
+
+// Круглая кнопка в шапке — выглядит как старый FAB, показывает таймер когда работает
+function PomodoroButton({ pomo }: { pomo: PomoState }) {
+  const { running, cur, mins, secs, setVisible } = pomo;
+  return (
+    <TouchableOpacity
+      onPress={() => setVisible(true)}
+      style={{
+        backgroundColor: running ? cur.color : 'rgba(255,255,255,0.2)',
+        borderRadius: 28, width: 52, height: 52,
+        alignItems: 'center', justifyContent: 'center',
+        shadowColor: '#000', shadowOpacity: running ? 0.25 : 0,
+        shadowRadius: 6, shadowOffset: { width: 0, height: 3 }, elevation: running ? 4 : 0,
+      }}>
+      <Text style={{ fontSize: 22 }}>⏱</Text>
+      {running && (
+        <Text style={{ color: '#fff', fontSize: 9, fontWeight: '800', position: 'absolute', bottom: 7, letterSpacing: 0.5 }}>
+          {mins}:{secs}
+        </Text>
+      )}
+    </TouchableOpacity>
+  );
+}
+
+// Модальное окно помодоро — рендерится на уровне App, живёт вечно
+function PomodoroModal({ pomo }: { pomo: PomoState }) {
+  const { phase, timeLeft, running, sessions, visible,
+          setVisible, setRunning, setPhase, setTimeLeft, cur, mins, secs } = pomo;
+  const pct = ((cur.duration - timeLeft) / cur.duration) * 100;
 
   return (
-    <>
-      <Modal visible={visible} animationType="slide" transparent onRequestClose={onClose}>
-        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
-              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
-              <TouchableOpacity onPress={onClose}>
-                <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
-              </TouchableOpacity>
-            </View>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
+      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+        <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+            <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
+            <TouchableOpacity onPress={() => setVisible(false)}>
+              <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
+            </TouchableOpacity>
+          </View>
 
-            <View style={{ backgroundColor: cur.bg, borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 20 }}>
-              <Text style={{ fontSize: 16, fontWeight: '600', color: cur.color, marginBottom: 8 }}>
-                {cur.emoji} {cur.name}
-              </Text>
-              <Text style={{ fontSize: 72, fontWeight: '800', color: cur.color, letterSpacing: 2 }}>
-                {mins}:{secs}
-              </Text>
-              <View style={{ width: '100%', height: 8, backgroundColor: '#fff', borderRadius: 4, marginTop: 16 }}>
-                <View style={{ width: `${pct}%` as any, height: 8, backgroundColor: cur.color, borderRadius: 4 }} />
-              </View>
-            </View>
-
-            <Text style={{ textAlign: 'center', color: '#6B7280', marginBottom: 20, fontSize: 14 }}>
-              🏆 Завершено сессий: <Text style={{ fontWeight: '700', color: '#111827' }}>{sessions}</Text>
+          <View style={{ backgroundColor: cur.bg, borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 20 }}>
+            <Text style={{ fontSize: 16, fontWeight: '600', color: cur.color, marginBottom: 8 }}>
+              {cur.emoji} {cur.name}
             </Text>
+            <Text style={{ fontSize: 72, fontWeight: '800', color: cur.color, letterSpacing: 2 }}>
+              {mins}:{secs}
+            </Text>
+            <View style={{ width: '100%', height: 8, backgroundColor: '#fff', borderRadius: 4, marginTop: 16 }}>
+              <View style={{ width: `${pct}%` as any, height: 8, backgroundColor: cur.color, borderRadius: 4 }} />
+            </View>
+          </View>
 
-            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
-              <TouchableOpacity
-                style={{ flex: 1, backgroundColor: running ? '#FEE2E2' : cur.color,
-                  borderRadius: 14, padding: 15, alignItems: 'center' }}
-                onPress={() => setRunning(!running)}>
-                <Text style={{ color: running ? '#DC2626' : '#fff', fontSize: 16, fontWeight: '700' }}>
-                  {running ? '⏸ Пауза' : '▶ Старт'}
+          <Text style={{ textAlign: 'center', color: '#6B7280', marginBottom: 20, fontSize: 14 }}>
+            🏆 Завершено сессий: <Text style={{ fontWeight: '700', color: '#111827' }}>{sessions}</Text>
+          </Text>
+
+          <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+            <TouchableOpacity
+              style={{ flex: 1, backgroundColor: running ? '#FEE2E2' : cur.color,
+                borderRadius: 14, padding: 15, alignItems: 'center' }}
+              onPress={() => setRunning(!running)}>
+              <Text style={{ color: running ? '#DC2626' : '#fff', fontSize: 16, fontWeight: '700' }}>
+                {running ? '⏸ Пауза' : '▶ Старт'}
+              </Text>
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={{ width: 50, backgroundColor: '#F3F4F6', borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+              onPress={() => { setRunning(false); setTimeLeft(cur.duration); }}>
+              <Text style={{ fontSize: 22 }}>↺</Text>
+            </TouchableOpacity>
+          </View>
+
+          <View style={{ flexDirection: 'row', gap: 8 }}>
+            {POMO_PHASES.map((p, i) => (
+              <TouchableOpacity key={i} onPress={() => { setPhase(i); setTimeLeft(p.duration); setRunning(false); }}
+                style={{ flex: 1, padding: 10, borderRadius: 12, backgroundColor: phase === i ? p.bg : '#F9FAFB',
+                  borderWidth: 1.5, borderColor: phase === i ? p.color : '#E5E7EB', alignItems: 'center' }}>
+                <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
+                <Text style={{ fontSize: 12, fontWeight: '600', color: phase === i ? p.color : '#6B7280', marginTop: 2 }}>
+                  {p.name} {p.duration / 60} мин
                 </Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={{ width: 50, backgroundColor: '#F3F4F6', borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
-                onPress={() => { setRunning(false); setTimeLeft(cur.duration); }}>
-                <Text style={{ fontSize: 22 }}>↺</Text>
-              </TouchableOpacity>
-            </View>
-
-            <View style={{ flexDirection: 'row', gap: 8 }}>
-              {POMO_PHASES.map((p, i) => (
-                <TouchableOpacity key={i} onPress={() => { setPhase(i); setTimeLeft(p.duration); setRunning(false); }}
-                  style={{ flex: 1, padding: 10, borderRadius: 12, backgroundColor: phase === i ? p.bg : '#F9FAFB',
-                    borderWidth: 1.5, borderColor: phase === i ? p.color : '#E5E7EB', alignItems: 'center' }}>
-                  <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
-                  <Text style={{ fontSize: 12, fontWeight: '600', color: phase === i ? p.color : '#6B7280', marginTop: 2 }}>
-                    {p.name} {p.duration / 60} мин
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <View style={{ height: 8 }} />
+            ))}
           </View>
+          <View style={{ height: 8 }} />
         </View>
-      </Modal>
-    </>
+      </View>
+    </Modal>
   );
 }
 
@@ -405,7 +438,7 @@ const MOOD_EMOJIS   = ['😞', '😕', '😐', '😊', '🤩'];
 const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
 type CheckinType = 'daily' | 'weekly' | 'evening';
 
-function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: () => void }) {
+function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onStats: () => void; pomo: PomoState }) {
   const [tasks,          setTasks]          = useState<Task[]>([]);
   const [hasKey,         setHasKey]         = useState(false);
   const [showCheckin,    setShowCheckin]    = useState(false);
@@ -419,7 +452,6 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
   const [quickWinLoad,   setQuickWinLoad]   = useState(false);
   const [checkinPending, setCheckinPending] = useState(false);
   const [weeklyPending,  setWeeklyPending]  = useState(false);
-  const [pomoVisible,    setPomoVisible]    = useState(false);
   const [weekDone,       setWeekDone]       = useState(0);
   const [topStreak,      setTopStreak]      = useState(0);
   const scrollRef    = useRef<ScrollView>(null);
@@ -564,10 +596,7 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
           <Text style={st.homeGreet}>{greet}</Text>
           <Text style={st.homeDate}>{dateStr}</Text>
         </View>
-        <TouchableOpacity onPress={() => setPomoVisible(true)}
-          style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8 }}>
-          <Text style={{ fontSize: 20 }}>⏱</Text>
-        </TouchableOpacity>
+        <PomodoroButton pomo={pomo} />
       </View>
 
       {/* ── Stats row ── */}
@@ -763,8 +792,6 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
         )}
 
       </ScrollView>
-
-      <PomodoroTimer visible={pomoVisible} onClose={() => setPomoVisible(false)} />
 
       {/* Checkin Modal */}
       <Modal visible={showCheckin} animationType="slide" transparent={false} onRequestClose={closeCheckin}>
@@ -1863,6 +1890,7 @@ export default function App() {
   const [screen,         setScreen]         = useState<Screen | null>(null);
   const [tab,            setTab]            = useState<Screen>('home');
   const [activeProvider, setActiveProvider] = useState<string>('groq');
+  const pomo = usePomodoro();
 
   useEffect(() => {
     storage.isOnboarded().then(done => setScreen(done ? 'home' : 'onboarding'));
@@ -1894,12 +1922,13 @@ export default function App() {
   return (
     <SafeAreaView style={st.safe}>
       <StatusBar style="dark" />
+      <PomodoroModal pomo={pomo} />
       {screen === 'stats' ? (
         <StatsScreen onBack={() => { setScreen(tab); }} />
       ) : (
         <>
           <View style={{ flex: 1 }}>
-            {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} />}
+            {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} pomo={pomo} />}
             {tab === 'chat'     && <ChatScreen key={activeProvider} />}
             {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
             {tab === 'habits'   && <HabitsScreen />}
