@@ -787,7 +787,31 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           <View style={[st.card, { backgroundColor: '#D1FAE5', alignItems: 'center' }]}>
             <Text style={{ fontSize: 36, marginBottom: 4 }}>🏆</Text>
             <Text style={{ fontWeight: '800', color: '#065F46', fontSize: 16 }}>Все задачи выполнены!</Text>
-            <Text style={{ color: '#047857', marginTop: 4, fontSize: 14 }}>Ты сегодня огонь 🔥</Text>
+            <Text style={{ color: '#047857', marginTop: 4, fontSize: 14, marginBottom: 14 }}>Ты сегодня огонь 🔥</Text>
+            <TouchableOpacity
+              style={{ backgroundColor: '#059669', borderRadius: 12, paddingHorizontal: 20, paddingVertical: 10 }}
+              onPress={async () => {
+                const goals = await storage.getGoals();
+                const reply = await sendSystemMessage(`Я выполнил все задачи на сегодня! Дай мне ещё 3 новые конкретные задачи на сегодня, основанные на моих целях: ${JSON.stringify(goals.day)}`);
+                if (reply) {
+                  const parsed = parseTasksFromText(reply);
+                  if (parsed.length > 0) {
+                    const today = todayString();
+                    const existing = await storage.getTasks();
+                    const existingTexts = new Set(existing.filter(t => t.date === today).map(t => t.text.toLowerCase()));
+                    const newTasks: Task[] = parsed
+                      .filter(t => !existingTexts.has(t.toLowerCase()))
+                      .map((t, i) => ({ id: `extra_${Date.now()}_${i}`, text: t, done: false, date: today }));
+                    if (newTasks.length > 0) {
+                      const all = [...existing, ...newTasks];
+                      await storage.saveTasks(all);
+                      setTasks(all.filter(t => t.date === today));
+                    }
+                  }
+                }
+              }}>
+              <Text style={{ color: '#fff', fontWeight: '700', fontSize: 14 }}>🤖 Ещё задачи</Text>
+            </TouchableOpacity>
           </View>
         )}
 
@@ -852,12 +876,27 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   );
 }
 
+// Извлекает задачи из ответа ИИ (нумерованные/маркированные списки)
+function parseTasksFromText(text: string): string[] {
+  const results: string[] = [];
+  for (const raw of text.split('\n')) {
+    const line = raw.trim();
+    const m = line.match(/^(?:\*{0,2}\d+[.)]\*{0,2}\s+|\*{0,2}[-•✅]\*{0,2}\s+)(.+)/);
+    if (!m) continue;
+    const task = m[1].replace(/\*\*/g, '').trim();
+    if (task.length >= 8 && task.length <= 250) results.push(task);
+  }
+  // Минимум 2 строки — защита от случайных одиночных пунктов
+  return results.length >= 2 ? results : [];
+}
+
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 function ChatScreen() {
   const [msgs,         setMsgs]         = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [input,        setInput]        = useState('');
   const [loading,      setLoading]      = useState(false);
   const [providerName, setProviderName] = useState('Коуч');
+  const [tasksBanner,  setTasksBanner]  = useState(0); // кол-во добавленных задач
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
   const tts          = useTTS();
@@ -882,6 +921,22 @@ function ChatScreen() {
     setMsgs([...next, { role: 'assistant' as const, content: reply }]);
     setLoading(false);
     setTimeout(() => scrollRef.current?.scrollToEnd({ animated: true }), 80);
+
+    // Парсим задачи из ответа и сохраняем на главную
+    const parsed = parseTasksFromText(reply);
+    if (parsed.length > 0) {
+      const today = todayString();
+      const existing = await storage.getTasks();
+      const existingTexts = new Set(existing.filter(t => t.date === today).map(t => t.text.toLowerCase()));
+      const newTasks: Task[] = parsed
+        .filter(t => !existingTexts.has(t.toLowerCase()))
+        .map((t, i) => ({ id: `chat_${Date.now()}_${i}`, text: t, done: false, date: today }));
+      if (newTasks.length > 0) {
+        await storage.saveTasks([...existing, ...newTasks]);
+        setTasksBanner(newTasks.length);
+        setTimeout(() => setTasksBanner(0), 4000);
+      }
+    }
   }
 
   async function clearChat() {
@@ -910,6 +965,14 @@ function ChatScreen() {
           </TouchableOpacity>
         )}
       </View>
+      {tasksBanner > 0 && (
+        <View style={{ backgroundColor: '#D1FAE5', paddingHorizontal: 16, paddingVertical: 10, flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={{ fontSize: 16 }}>✅</Text>
+          <Text style={{ color: '#065F46', fontWeight: '600', fontSize: 14 }}>
+            {tasksBanner} {tasksBanner === 1 ? 'задача добавлена' : tasksBanner < 5 ? 'задачи добавлены' : 'задач добавлено'} на главную
+          </Text>
+        </View>
+      )}
       <KeyboardAvoidingView style={{ flex: 1 }} behavior={Platform.OS === 'android' ? undefined : 'padding'} keyboardVerticalOffset={80}>
         {msgs.length === 0 ? (
           <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', padding: 32 }}>
