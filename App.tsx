@@ -973,6 +973,7 @@ function ChatScreen() {
 
 // ─── Habits ───────────────────────────────────────────────────────────────────
 const HABIT_EMOJIS = ['⭐','💪','📚','🏃','🧘','💧','🥗','😴','✍️','🎯','🧠','❤️','🎸','💰','🌿','🚫','📵','🧹','🛁','🙏'];
+const DAY_LABELS   = ['Пн','Вт','Ср','Чт','Пт','Сб','Вс'];
 
 function calcStreak(habitId: string, logs: HabitLog[]): number {
   let streak = 0;
@@ -1002,12 +1003,15 @@ function pluralDays(n: number) {
 }
 
 function HabitsScreen() {
-  const [habits, setHabits] = useState<Habit[]>([]);
-  const [logs, setLogs] = useState<HabitLog[]>([]);
-  const [showAdd, setShowAdd] = useState(false);
-  const [newName, setNewName] = useState('');
-  const [newEmoji, setNewEmoji] = useState('⭐');
-  const today = todayString();
+  const [habits,     setHabits]     = useState<Habit[]>([]);
+  const [logs,       setLogs]       = useState<HabitLog[]>([]);
+  const [editHabit,  setEditHabit]  = useState<Habit | null>(null);
+  const [isNew,      setIsNew]      = useState(false);
+  const [formName,   setFormName]   = useState('');
+  const [formEmoji,  setFormEmoji]  = useState('⭐');
+  const [formDays,   setFormDays]   = useState<number[]>([0,1,2,3,4,5,6]);
+  const today    = todayString();
+  const todayDow = (new Date().getDay() + 6) % 7; // JS Sun=0 → Пн=0
 
   useEffect(() => {
     Promise.all([storage.getHabits(), storage.getHabitLogs()]).then(([h, l]) => {
@@ -1015,38 +1019,68 @@ function HabitsScreen() {
     });
   }, []);
 
+  function openAdd() {
+    setFormName(''); setFormEmoji('⭐'); setFormDays([0,1,2,3,4,5,6]);
+    setIsNew(true);
+    setEditHabit({ id: '', name: '', emoji: '⭐' });
+  }
+
+  function openEdit(habit: Habit) {
+    setFormName(habit.name);
+    setFormEmoji(habit.emoji);
+    setFormDays(habit.days ?? [0,1,2,3,4,5,6]);
+    setIsNew(false);
+    setEditHabit(habit);
+  }
+
+  async function saveHabit() {
+    if (!formName.trim()) return;
+    let updated: Habit[];
+    if (isNew) {
+      updated = [...habits, { id: Date.now().toString(), name: formName.trim(), emoji: formEmoji, days: formDays }];
+    } else {
+      updated = habits.map(h => h.id === editHabit!.id
+        ? { ...h, name: formName.trim(), emoji: formEmoji, days: formDays }
+        : h);
+    }
+    await storage.saveHabits(updated);
+    setHabits(updated);
+    setEditHabit(null);
+  }
+
+  async function deleteHabit(id: string) {
+    const doDelete = async () => {
+      const updated = habits.filter(h => h.id !== id);
+      await storage.saveHabits(updated);
+      setHabits(updated);
+    };
+    if (Platform.OS === 'web') {
+      if ((globalThis as any).confirm('Удалить привычку? История отметок тоже удалится.')) await doDelete();
+    } else {
+      Alert.alert('Удалить привычку?', 'История отметок тоже удалится.', [
+        { text: 'Отмена', style: 'cancel' },
+        { text: 'Удалить', style: 'destructive', onPress: doDelete },
+      ]);
+    }
+  }
+
   async function toggleHabit(habitId: string) {
     const updated = await storage.toggleHabitLog(habitId, today);
     setLogs(updated);
   }
 
-  async function addHabit() {
-    if (!newName.trim()) return;
-    const habit: Habit = { id: Date.now().toString(), name: newName.trim(), emoji: newEmoji };
-    const updated = [...habits, habit];
-    await storage.saveHabits(updated);
-    setHabits(updated);
-    setNewName(''); setNewEmoji('⭐'); setShowAdd(false);
+  function toggleDay(d: number) {
+    setFormDays(prev => prev.includes(d) ? prev.filter(x => x !== d) : [...prev, d]);
   }
 
-  async function deleteHabit(id: string) {
-    Alert.alert('Удалить привычку?', 'История отметок тоже удалится.', [
-      { text: 'Отмена', style: 'cancel' },
-      { text: 'Удалить', style: 'destructive', onPress: async () => {
-        const updated = habits.filter(h => h.id !== id);
-        await storage.saveHabits(updated);
-        setHabits(updated);
-      }},
-    ]);
-  }
-
-  const todayDone = habits.filter(h => logs.some(l => l.habitId === h.id && l.date === today)).length;
+  const todayHabits = habits.filter(h => !h.days || h.days.includes(todayDow));
+  const todayDone   = todayHabits.filter(h => logs.some(l => l.habitId === h.id && l.date === today)).length;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={st.topBar}>
         <Text style={st.screenTitle}>🔗 Привычки</Text>
-        <TouchableOpacity onPress={() => setShowAdd(true)}>
+        <TouchableOpacity onPress={openAdd}>
           <Text style={{ fontSize: 30, color: '#4F46E5', lineHeight: 34 }}>+</Text>
         </TouchableOpacity>
       </View>
@@ -1055,14 +1089,16 @@ function HabitsScreen() {
         {habits.length > 0 && (
           <View style={[st.card, { flexDirection: 'row', alignItems: 'center' }]}>
             <Text style={{ fontSize: 32, marginRight: 12 }}>
-              {todayDone === habits.length ? '🏆' : '🎯'}
+              {todayHabits.length > 0 && todayDone >= todayHabits.length ? '🏆' : '🎯'}
             </Text>
             <View style={{ flex: 1 }}>
               <Text style={{ fontWeight: '700', fontSize: 16, color: '#111827' }}>
-                {todayDone === habits.length ? 'Все привычки выполнены!' : `Сегодня: ${todayDone} из ${habits.length}`}
+                {todayHabits.length > 0 && todayDone >= todayHabits.length
+                  ? 'Все привычки выполнены!'
+                  : `Сегодня: ${todayDone} из ${todayHabits.length}`}
               </Text>
               <View style={st.progBar}>
-                <View style={[st.progFill, { width: `${habits.length ? (todayDone / habits.length) * 100 : 0}%` as any }]} />
+                <View style={[st.progFill, { width: `${todayHabits.length ? (todayDone / todayHabits.length) * 100 : 0}%` as any }]} />
               </View>
             </View>
           </View>
@@ -1075,24 +1111,38 @@ function HabitsScreen() {
             <Text style={{ color: '#6B7280', textAlign: 'center', marginTop: 4, marginBottom: 20 }}>
               Добавь первую привычку — нажми + вверху
             </Text>
-            <TouchableOpacity style={st.primaryBtn} onPress={() => setShowAdd(true)}>
+            <TouchableOpacity style={st.primaryBtn} onPress={openAdd}>
               <Text style={st.primaryBtnText}>+ Добавить привычку</Text>
             </TouchableOpacity>
           </View>
         ) : (
           habits.map(habit => {
-            const streak = calcStreak(habit.id, logs);
-            const last14 = getLast14(habit.id, logs);
-            const doneToday = logs.some(l => l.habitId === habit.id && l.date === today);
+            const streak     = calcStreak(habit.id, logs);
+            const last14     = getLast14(habit.id, logs);
+            const doneToday  = logs.some(l => l.habitId === habit.id && l.date === today);
+            const activeToday = !habit.days || habit.days.includes(todayDow);
             return (
-              <View key={habit.id} style={[st.card, doneToday && { borderWidth: 1.5, borderColor: '#10B981' }]}>
-                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 12 }}>
+              <View key={habit.id} style={[st.card,
+                doneToday && { borderWidth: 1.5, borderColor: '#10B981' },
+                !activeToday && { opacity: 0.55 }]}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
                   <Text style={{ fontSize: 30, marginRight: 12 }}>{habit.emoji}</Text>
                   <View style={{ flex: 1 }}>
                     <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{habit.name}</Text>
                     <Text style={{ fontSize: 13, color: streak > 0 ? '#F59E0B' : '#9CA3AF', marginTop: 2 }}>
                       {streak > 0 ? `🔥 ${streak} ${pluralDays(streak)} подряд` : 'Начни сегодня!'}
                     </Text>
+                    {habit.days && habit.days.length < 7 && (
+                      <View style={{ flexDirection: 'row', gap: 3, marginTop: 5 }}>
+                        {DAY_LABELS.map((d, i) => (
+                          <View key={i} style={{ paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5,
+                            backgroundColor: habit.days!.includes(i) ? '#4F46E5' : '#F3F4F6' }}>
+                            <Text style={{ fontSize: 10, fontWeight: '700',
+                              color: habit.days!.includes(i) ? '#fff' : '#D1D5DB' }}>{d}</Text>
+                          </View>
+                        ))}
+                      </View>
+                    )}
                   </View>
                   <TouchableOpacity
                     style={[{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center' },
@@ -1101,17 +1151,21 @@ function HabitsScreen() {
                     <Text style={{ fontSize: 22 }}>{doneToday ? '✅' : '◯'}</Text>
                   </TouchableOpacity>
                 </View>
-                {/* 14-day mini calendar */}
-                <View style={{ flexDirection: 'row', gap: 3, marginBottom: 4 }}>
+                <View style={{ flexDirection: 'row', gap: 3, marginBottom: 6 }}>
                   {last14.map((done, i) => (
                     <View key={i} style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: done ? '#4F46E5' : '#E5E7EB' }} />
                   ))}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: 11, color: '#9CA3AF' }}>последние 14 дней</Text>
-                  <TouchableOpacity onPress={() => deleteHabit(habit.id)}>
-                    <Text style={{ fontSize: 12, color: '#EF4444' }}>удалить</Text>
-                  </TouchableOpacity>
+                  <View style={{ flexDirection: 'row', gap: 14 }}>
+                    <TouchableOpacity onPress={() => openEdit(habit)}>
+                      <Text style={{ fontSize: 12, color: '#4F46E5', fontWeight: '600' }}>✏️ изменить</Text>
+                    </TouchableOpacity>
+                    <TouchableOpacity onPress={() => deleteHabit(habit.id)}>
+                      <Text style={{ fontSize: 12, color: '#EF4444' }}>удалить</Text>
+                    </TouchableOpacity>
+                  </View>
                 </View>
               </View>
             );
@@ -1119,36 +1173,52 @@ function HabitsScreen() {
         )}
       </ScrollView>
 
-      {/* Add habit modal */}
-      <Modal visible={showAdd} animationType="slide" transparent onRequestClose={() => setShowAdd(false)}>
+      {/* Add / Edit habit modal */}
+      <Modal visible={editHabit !== null} animationType="slide" transparent onRequestClose={() => setEditHabit(null)}>
         <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
           <KeyboardAvoidingView behavior={Platform.OS === 'android' ? undefined : 'padding'}>
             <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 }}>
               <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 }}>
-                <Text style={st.modalTitle}>Новая привычка</Text>
-                <TouchableOpacity onPress={() => setShowAdd(false)}>
+                <Text style={st.modalTitle}>{isNew ? 'Новая привычка' : 'Редактировать'}</Text>
+                <TouchableOpacity onPress={() => setEditHabit(null)}>
                   <Text style={{ fontSize: 22, color: '#6B7280' }}>✕</Text>
                 </TouchableOpacity>
               </View>
+
               <Text style={st.fieldLabel}>Иконка</Text>
               <ScrollView horizontal showsHorizontalScrollIndicator={false} style={{ marginBottom: 14 }}>
                 {HABIT_EMOJIS.map(e => (
-                  <TouchableOpacity key={e} onPress={() => setNewEmoji(e)}
+                  <TouchableOpacity key={e} onPress={() => setFormEmoji(e)}
                     style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-                      marginRight: 8, backgroundColor: newEmoji === e ? '#EEF2FF' : '#F3F4F6',
-                      borderWidth: newEmoji === e ? 2 : 0, borderColor: '#4F46E5' }}>
+                      marginRight: 8, backgroundColor: formEmoji === e ? '#EEF2FF' : '#F3F4F6',
+                      borderWidth: formEmoji === e ? 2 : 0, borderColor: '#4F46E5' }}>
                     <Text style={{ fontSize: 22 }}>{e}</Text>
                   </TouchableOpacity>
                 ))}
               </ScrollView>
+
               <Text style={st.fieldLabel}>Название</Text>
               <TextInput
                 style={[st.obInput, { marginBottom: 16 }]}
-                value={newName} onChangeText={setNewName}
-                placeholder="Например: Пить 2л воды" placeholderTextColor="#9CA3AF" autoFocus
+                value={formName} onChangeText={setFormName}
+                placeholder="Например: Пить 2л воды" placeholderTextColor="#9CA3AF"
               />
-              <TouchableOpacity style={st.primaryBtn} onPress={addHabit}>
-                <Text style={st.primaryBtnText}>Добавить привычку</Text>
+
+              <Text style={st.fieldLabel}>Дни недели</Text>
+              <View style={{ flexDirection: 'row', gap: 5, marginBottom: 20 }}>
+                {DAY_LABELS.map((d, i) => (
+                  <TouchableOpacity key={i} onPress={() => toggleDay(i)}
+                    style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center',
+                      backgroundColor: formDays.includes(i) ? '#4F46E5' : '#F3F4F6',
+                      borderWidth: 1.5, borderColor: formDays.includes(i) ? '#4F46E5' : '#E5E7EB' }}>
+                    <Text style={{ fontSize: 12, fontWeight: '700',
+                      color: formDays.includes(i) ? '#fff' : '#9CA3AF' }}>{d}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              <TouchableOpacity style={st.primaryBtn} onPress={saveHabit}>
+                <Text style={st.primaryBtnText}>{isNew ? 'Добавить привычку' : 'Сохранить'}</Text>
               </TouchableOpacity>
               <View style={{ height: 8 }} />
             </View>

@@ -33,6 +33,7 @@ export interface Habit {
   id: string;
   name: string;
   emoji: string;
+  days?: number[]; // 0=Пн, 1=Вт, 2=Ср, 3=Чт, 4=Пт, 5=Сб, 6=Вс
 }
 
 export interface HabitLog {
