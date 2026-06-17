@@ -563,6 +563,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
   const [draftModels, setDraftModels] = useState<Partial<Record<ProviderId, string>>>({});
   const [city, setCity] = useState<City | null>(null);
   const [showCityPicker, setShowCityPicker] = useState(false);
+  const [citySearch, setCitySearch] = useState('');
 
   useEffect(() => {
     storage.getProviderSettings().then(s => {
@@ -761,12 +762,23 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
             <View style={st.modalHeader}>
               <Text style={st.modalTitle}>🌍 Выбери город</Text>
-              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+              <TouchableOpacity onPress={() => { setShowCityPicker(false); setCitySearch(''); }}>
                 <Text style={{ fontSize: 22, color: '#6B7280' }}>✕</Text>
               </TouchableOpacity>
             </View>
-            <ScrollView>
-              {CITIES.map(c => {
+            <View style={{ paddingHorizontal: 16, paddingVertical: 10, borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
+              <TextInput
+                style={[st.obInput, { marginBottom: 0 }]}
+                value={citySearch}
+                onChangeText={setCitySearch}
+                placeholder="🔍 Поиск города..."
+                placeholderTextColor="#9CA3AF"
+                autoCapitalize="none"
+                clearButtonMode="while-editing"
+              />
+            </View>
+            <ScrollView keyboardShouldPersistTaps="handled">
+              {CITIES.filter(c => c.name.toLowerCase().includes(citySearch.toLowerCase())).map(c => {
                 const isSelected = city?.name === c.name;
                 return (
                   <TouchableOpacity
@@ -776,6 +788,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
                       await storage.saveCity(c);
                       setCity(c);
                       setShowCityPicker(false);
+                      setCitySearch('');
                     }}
                   >
                     <View style={{ flex: 1 }}>
