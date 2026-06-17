@@ -93,6 +93,30 @@ function useSpeech(
   return { listening, start, stop, pulse };
 }
 
+// ─── Text-to-Speech ───────────────────────────────────────────────────────────
+function useTTS() {
+  const [speakingIdx, setSpeakingIdx] = useState<number | null>(null);
+
+  function speak(text: string, idx: number) {
+    const synth = (globalThis as any).speechSynthesis;
+    if (!synth) return;
+    if (speakingIdx === idx) { synth.cancel(); setSpeakingIdx(null); return; }
+    synth.cancel();
+    const utt = new (globalThis as any).SpeechSynthesisUtterance(text);
+    utt.lang  = 'ru-RU';
+    utt.rate  = 1.0;
+    utt.pitch = 1.0;
+    utt.onstart = () => setSpeakingIdx(idx);
+    utt.onend   = () => setSpeakingIdx(null);
+    utt.onerror = () => setSpeakingIdx(null);
+    synth.speak(utt);
+  }
+
+  function stop() { (globalThis as any).speechSynthesis?.cancel(); setSpeakingIdx(null); }
+
+  return { speakingIdx, speak, stop };
+}
+
 // ─── Mic Button ───────────────────────────────────────────────────────────────
 function MicButton({
   onText,
@@ -414,6 +438,7 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
   const [topStreak,      setTopStreak]      = useState(0);
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
+  const tts          = useTTS();
 
   const h       = new Date().getHours();
   const greet   = h < 5 ? 'Доброй ночи 🌙' : h < 12 ? 'Доброе утро ☀️' : h < 17 ? 'Добрый день 🌤' : 'Добрый вечер 🌙';
@@ -772,9 +797,18 @@ function HomeScreen({ onSettings, onStats }: { onSettings: () => void; onStats: 
           </View>
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 20 }}>
             {msgs.map((m, i) => (
-              <View key={i} style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI]}>
-                {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
-                <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
+              <View key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginVertical: 4 }}>
+                <View style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
+                  {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
+                  <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
+                </View>
+                {m.role === 'assistant' && (
+                  <TouchableOpacity onPress={() => tts.speak(m.content, i)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, paddingTop: 4 }}>
+                    <Text style={{ fontSize: 14 }}>{tts.speakingIdx === i ? '⏹' : '🔊'}</Text>
+                    <Text style={{ fontSize: 11, color: '#9CA3AF' }}>{tts.speakingIdx === i ? 'Стоп' : 'Вслух'}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
             {loading && (
@@ -814,6 +848,7 @@ function ChatScreen() {
   const [providerName, setProviderName] = useState('Коуч');
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
+  const tts          = useTTS();
 
   useEffect(() => {
     storage.getProviderSettings().then(ps => {
@@ -883,9 +918,18 @@ function ChatScreen() {
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 16 }}
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
             {msgs.map((m, i) => (
-              <View key={i} style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI]}>
-                {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
-                <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
+              <View key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginVertical: 4 }}>
+                <View style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
+                  {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
+                  <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
+                </View>
+                {m.role === 'assistant' && (
+                  <TouchableOpacity onPress={() => tts.speak(m.content, i)}
+                    style={{ flexDirection: 'row', alignItems: 'center', gap: 4, paddingLeft: 8, paddingTop: 4 }}>
+                    <Text style={{ fontSize: 14 }}>{tts.speakingIdx === i ? '⏹' : '🔊'}</Text>
+                    <Text style={{ fontSize: 11, color: '#9CA3AF' }}>{tts.speakingIdx === i ? 'Стоп' : 'Вслух'}</Text>
+                  </TouchableOpacity>
+                )}
               </View>
             ))}
             {loading && (
