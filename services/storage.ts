@@ -7,6 +7,13 @@ export interface Goals {
   month: string[];
   year: string[];
   fiveYear: string[];
+  antiGoals: string[];   // что избегать
+}
+
+export interface Commitment {
+  text: string;
+  deadline: string; // YYYY-MM-DD
+  createdAt: string;
 }
 
 export interface Message {
@@ -60,6 +67,7 @@ const KEYS = {
   HABITS: '@habits',
   HABIT_LOGS: '@habit_logs',
   MOOD: '@mood_entries',
+  COMMITMENT: '@commitment',
 };
 
 const DEFAULT_PROVIDER: ProviderSettings = {
@@ -71,7 +79,8 @@ const DEFAULT_PROVIDER: ProviderSettings = {
 export const storage = {
   async getGoals(): Promise<Goals> {
     const raw = await AsyncStorage.getItem(KEYS.GOALS);
-    return raw ? JSON.parse(raw) : { day: [], week: [], month: [], year: [], fiveYear: [] };
+    const defaults = { day: [], week: [], month: [], year: [], fiveYear: [], antiGoals: [] };
+    return raw ? { ...defaults, ...JSON.parse(raw) } : defaults;
   },
 
   async saveGoals(goals: Goals): Promise<void> {
@@ -215,6 +224,19 @@ export const storage = {
   async getTodayMood(): Promise<MoodEntry | null> {
     const entries = await storage.getMoodEntries();
     return entries.find(e => e.date === todayString()) || null;
+  },
+
+  async getCommitment(): Promise<Commitment | null> {
+    const raw = await AsyncStorage.getItem(KEYS.COMMITMENT);
+    return raw ? JSON.parse(raw) : null;
+  },
+
+  async saveCommitment(c: Commitment): Promise<void> {
+    await AsyncStorage.setItem(KEYS.COMMITMENT, JSON.stringify(c));
+  },
+
+  async clearCommitment(): Promise<void> {
+    await AsyncStorage.removeItem(KEYS.COMMITMENT);
   },
 
   async clearAll(): Promise<void> {

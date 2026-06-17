@@ -5,9 +5,9 @@ import {
   SafeAreaView, Alert, Animated, Easing
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { storage, Goals, Task, Habit, HabitLog, MoodEntry, todayString, ProviderId, ProviderSettings } from './services/storage';
+import { storage, Goals, Task, Habit, HabitLog, MoodEntry, Commitment, todayString, ProviderId, ProviderSettings } from './services/storage';
 import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
-import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT } from './constants/prompts';
+import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT, QUICK_WIN_PROMPT } from './constants/prompts';
 import { CITIES, City, getCityTime } from './constants/cities';
 
 type Screen = 'home' | 'chat' | 'goals' | 'habits' | 'settings' | 'onboarding';
@@ -232,33 +232,167 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
   );
 }
 
+// ─── Pomodoro Timer ───────────────────────────────────────────────────────────
+const POMO_PHASES = [
+  { name: 'Фокус',  duration: 25 * 60, color: '#4F46E5', bg: '#EEF2FF', emoji: '🎯' },
+  { name: 'Пауза',  duration:  5 * 60, color: '#10B981', bg: '#D1FAE5', emoji: '☕' },
+];
+
+function PomodoroTimer() {
+  const [phase,    setPhase]    = useState(0);
+  const [timeLeft, setTimeLeft] = useState(POMO_PHASES[0].duration);
+  const [running,  setRunning]  = useState(false);
+  const [sessions, setSessions] = useState(0);
+  const [visible,  setVisible]  = useState(false);
+  const ivRef = useRef<any>(null);
+
+  useEffect(() => {
+    if (running) {
+      ivRef.current = setInterval(() => {
+        setTimeLeft(t => {
+          if (t > 1) return t - 1;
+          clearInterval(ivRef.current);
+          const next = (phase + 1) % 2;
+          if (next === 0) setSessions(s => s + 1);
+          setPhase(next);
+          setTimeLeft(POMO_PHASES[next].duration);
+          setRunning(false);
+          return POMO_PHASES[next].duration;
+        });
+      }, 1000);
+    } else {
+      clearInterval(ivRef.current);
+    }
+    return () => clearInterval(ivRef.current);
+  }, [running, phase]);
+
+  const cur  = POMO_PHASES[phase];
+  const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
+  const secs = (timeLeft % 60).toString().padStart(2, '0');
+  const pct  = ((cur.duration - timeLeft) / cur.duration) * 100;
+
+  return (
+    <>
+      {/* FAB */}
+      <TouchableOpacity onPress={() => setVisible(true)}
+        style={{ position: 'absolute', bottom: 16, right: 16, zIndex: 10,
+          backgroundColor: running ? cur.color : '#4F46E5',
+          borderRadius: 28, width: 56, height: 56, alignItems: 'center', justifyContent: 'center',
+          shadowColor: '#000', shadowOpacity: 0.2, shadowRadius: 8, shadowOffset: { width: 0, height: 4 }, elevation: 6 }}>
+        <Text style={{ fontSize: 24 }}>{running ? '⏱' : '⏱'}</Text>
+        {running && (
+          <Text style={{ color: '#fff', fontSize: 9, fontWeight: '700', position: 'absolute', bottom: 6 }}>
+            {mins}:{secs}
+          </Text>
+        )}
+      </TouchableOpacity>
+
+      <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
+              <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
+              <TouchableOpacity onPress={() => setVisible(false)}>
+                <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ backgroundColor: cur.bg, borderRadius: 20, padding: 24, alignItems: 'center', marginBottom: 20 }}>
+              <Text style={{ fontSize: 16, fontWeight: '600', color: cur.color, marginBottom: 8 }}>
+                {cur.emoji} {cur.name}
+              </Text>
+              <Text style={{ fontSize: 72, fontWeight: '800', color: cur.color, letterSpacing: 2 }}>
+                {mins}:{secs}
+              </Text>
+              <View style={{ width: '100%', height: 8, backgroundColor: '#fff', borderRadius: 4, marginTop: 16 }}>
+                <View style={{ width: `${pct}%` as any, height: 8, backgroundColor: cur.color, borderRadius: 4 }} />
+              </View>
+            </View>
+
+            <Text style={{ textAlign: 'center', color: '#6B7280', marginBottom: 20, fontSize: 14 }}>
+              🏆 Завершено сессий: <Text style={{ fontWeight: '700', color: '#111827' }}>{sessions}</Text>
+            </Text>
+
+            <View style={{ flexDirection: 'row', gap: 10, marginBottom: 12 }}>
+              <TouchableOpacity
+                style={{ flex: 1, backgroundColor: running ? '#FEE2E2' : cur.color,
+                  borderRadius: 14, padding: 15, alignItems: 'center' }}
+                onPress={() => setRunning(!running)}>
+                <Text style={{ color: running ? '#DC2626' : '#fff', fontSize: 16, fontWeight: '700' }}>
+                  {running ? '⏸ Пауза' : '▶ Старт'}
+                </Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={{ width: 50, backgroundColor: '#F3F4F6', borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
+                onPress={() => { setRunning(false); setTimeLeft(cur.duration); }}>
+                <Text style={{ fontSize: 22 }}>↺</Text>
+              </TouchableOpacity>
+            </View>
+
+            <View style={{ flexDirection: 'row', gap: 8 }}>
+              {POMO_PHASES.map((p, i) => (
+                <TouchableOpacity key={i} onPress={() => { setPhase(i); setTimeLeft(p.duration); setRunning(false); }}
+                  style={{ flex: 1, padding: 10, borderRadius: 12, backgroundColor: phase === i ? p.bg : '#F9FAFB',
+                    borderWidth: 1.5, borderColor: phase === i ? p.color : '#E5E7EB', alignItems: 'center' }}>
+                  <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
+                  <Text style={{ fontSize: 12, fontWeight: '600', color: phase === i ? p.color : '#6B7280', marginTop: 2 }}>
+                    {p.name} {p.duration / 60} мин
+                  </Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+            <View style={{ height: 8 }} />
+          </View>
+        </View>
+      </Modal>
+    </>
+  );
+}
+
 // ─── Home ─────────────────────────────────────────────────────────────────────
-const MOOD_EMOJIS = ['😞', '😕', '😐', '😊', '🤩'];
-const ENERGY_ICONS = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
+const MOOD_EMOJIS   = ['😞', '😕', '😐', '😊', '🤩'];
+const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
+type CheckinType = 'daily' | 'weekly' | 'evening';
 
 function HomeScreen({ onSettings }: { onSettings: () => void }) {
-  const [tasks, setTasks] = useState<Task[]>([]);
-  const [hasKey, setHasKey] = useState(false);
+  const [tasks,       setTasks]       = useState<Task[]>([]);
+  const [hasKey,      setHasKey]      = useState(false);
   const [showCheckin, setShowCheckin] = useState(false);
-  const [checkinType, setCheckinType] = useState<'daily' | 'weekly'>('daily');
-  const [msgs, setMsgs] = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
-  const [input, setInput] = useState('');
-  const [loading, setLoading] = useState(false);
-  const [todayMood, setTodayMood] = useState<MoodEntry | null>(null);
-  const [draftMood, setDraftMood] = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
+  const [checkinType, setCheckinType] = useState<CheckinType>('daily');
+  const [msgs,        setMsgs]        = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
+  const [input,       setInput]       = useState('');
+  const [loading,     setLoading]     = useState(false);
+  const [todayMood,   setTodayMood]   = useState<MoodEntry | null>(null);
+  const [draftMood,   setDraftMood]   = useState<{ mood: number; energy: number }>({ mood: 0, energy: 0 });
+  const [quickWin,    setQuickWin]    = useState('');
+  const [weekDone,    setWeekDone]    = useState(0);
+  const [topStreak,   setTopStreak]   = useState(0);
   const scrollRef = useRef<ScrollView>(null);
 
-  const h = new Date().getHours();
-  const greet = h < 12 ? 'Доброе утро! ☀️' : h < 17 ? 'Добрый день! 🌤' : 'Добрый вечер! 🌙';
+  const h       = new Date().getHours();
+  const greet   = h < 5 ? 'Доброй ночи 🌙' : h < 12 ? 'Доброе утро ☀️' : h < 17 ? 'Добрый день 🌤' : 'Добрый вечер 🌙';
   const dateStr = new Date().toLocaleDateString('ru-RU', { weekday: 'long', day: 'numeric', month: 'long' });
+  const isEvening = h >= 19;
 
   useEffect(() => { init(); }, []);
 
   async function init() {
     const key = await storage.getApiKey();
     setHasKey(!!key);
+
     const all = await storage.getTasks();
     setTasks(all.filter(t => t.date === todayString()));
+
+    // Weekly stats
+    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+    const weekTasks = all.filter(t => new Date(t.date) >= weekAgo);
+    setWeekDone(weekTasks.filter(t => t.done).length);
+
+    // Top habit streak
+    const [habits, logs] = await Promise.all([storage.getHabits(), storage.getHabitLogs()]);
+    const maxStreak = habits.reduce((m, h) => Math.max(m, calcStreak(h.id, logs)), 0);
+    setTopStreak(maxStreak);
+
     const mood = await storage.getTodayMood();
     setTodayMood(mood);
 
@@ -266,40 +400,47 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
 
     const lastCheckin = await storage.getLastCheckin();
     if (lastCheckin !== todayString()) {
-      setCheckinType('daily');
-      setShowCheckin(true);
-      startDailyCheckin();
-      return;
+      setCheckinType('daily'); setShowCheckin(true); startCheckin('daily'); return;
     }
 
-    // Weekly review: trigger if 7+ days since last review
     const lastWeekly = await storage.getLastWeeklyReview();
     if (lastWeekly) {
-      const daysSince = (Date.now() - new Date(lastWeekly).getTime()) / 86400000;
-      if (daysSince >= 7) { setCheckinType('weekly'); setShowCheckin(true); startWeeklyReview(); }
+      if ((Date.now() - new Date(lastWeekly).getTime()) / 86400000 >= 7) {
+        setCheckinType('weekly'); setShowCheckin(true); startCheckin('weekly');
+      }
     } else {
-      // First time — trigger after first daily checkin is done
       await storage.setLastWeeklyReview(todayString());
+    }
+
+    // Quick win
+    const goals = await storage.getGoals();
+    if (goals.day.length || goals.week.length) {
+      sendSystemMessage(QUICK_WIN_PROMPT(goals)).then(r => { if (r) setQuickWin(r.replace(/^⚡\s*/,'').trim()); });
     }
   }
 
-  async function startDailyCheckin() {
+  async function startCheckin(type: CheckinType) {
     setLoading(true);
     const goals = await storage.getGoals();
-    const reply = await sendSystemMessage(DAILY_CHECKIN_PROMPT(goals));
-    setMsgs([{ role: 'assistant', content: reply || 'Привет! Как прошёл вчерашний день?' }]);
-    setLoading(false);
-  }
-
-  async function startWeeklyReview() {
-    setLoading(true);
-    const goals = await storage.getGoals();
-    const all = await storage.getTasks();
-    const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
-    const weekTasks = all.filter(t => new Date(t.date) >= weekAgo);
-    const done = weekTasks.filter(t => t.done).length;
-    const reply = await sendSystemMessage(WEEKLY_REVIEW_PROMPT(goals, done, weekTasks.length));
-    setMsgs([{ role: 'assistant', content: reply || 'Привет! Давай разберём твою неделю — что получилось?' }]);
+    let reply = '';
+    if (type === 'daily') {
+      reply = await sendSystemMessage(DAILY_CHECKIN_PROMPT(goals));
+    } else if (type === 'weekly') {
+      const all = await storage.getTasks();
+      const weekAgo = new Date(); weekAgo.setDate(weekAgo.getDate() - 7);
+      const wt = all.filter(t => new Date(t.date) >= weekAgo);
+      reply = await sendSystemMessage(WEEKLY_REVIEW_PROMPT(goals, wt.filter(t=>t.done).length, wt.length));
+    } else {
+      const all = await storage.getTasks();
+      const todayTasks = all.filter(t => t.date === todayString());
+      reply = await sendSystemMessage(EVENING_RITUAL_PROMPT(goals, todayTasks.length, todayTasks.filter(t=>t.done).length));
+    }
+    const fallbacks: Record<CheckinType, string> = {
+      daily:   'Привет! Как прошёл вчерашний день?',
+      weekly:  'Привет! Давай разберём твою неделю.',
+      evening: 'Добрый вечер! Как прошёл день?',
+    };
+    setMsgs([{ role: 'assistant', content: reply || fallbacks[type] }]);
     setLoading(false);
   }
 
@@ -313,7 +454,7 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
     const withReply = [...next, { role: 'assistant' as const, content: reply }];
     setMsgs(withReply); setLoading(false);
     const lines = reply.split('\n').filter(l => l.match(/✅|^\d+\./));
-    if (lines.length) {
+    if (lines.length && checkinType !== 'evening') {
       const existing = await storage.getTasks();
       const newTasks: Task[] = lines.map((l, i) => ({
         id: `${Date.now()}_${i}`,
@@ -327,10 +468,9 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
   }
 
   async function closeCheckin() {
-    if (checkinType === 'daily') await storage.setLastCheckin(todayString());
-    else await storage.setLastWeeklyReview(todayString());
-    setShowCheckin(false);
-    setMsgs([]);
+    if (checkinType === 'daily')  await storage.setLastCheckin(todayString());
+    if (checkinType === 'weekly') await storage.setLastWeeklyReview(todayString());
+    setShowCheckin(false); setMsgs([]);
   }
 
   async function toggleTask(id: string) {
@@ -345,44 +485,75 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
     setTodayMood(entry);
   }
 
-  const done = tasks.filter(t => t.done).length;
+  function openCheckin(type: CheckinType) {
+    setCheckinType(type); setMsgs([]); setShowCheckin(true); startCheckin(type);
+  }
+
+  const done        = tasks.filter(t => t.done).length;
+  const checkinTitle: Record<CheckinType, string> = {
+    daily: '☀️ Утренний чек-ин', weekly: '📊 Разбор недели', evening: '🌙 Вечерний ритуал',
+  };
 
   return (
-    <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
-      <View style={st.topBar}>
-        <View>
-          <Text style={st.greeting}>{greet}</Text>
-          <Text style={st.dateText}>{dateStr}</Text>
+    <View style={{ flex: 1, backgroundColor: '#F0F2FF' }}>
+
+      {/* ── Gradient-style header ── */}
+      <View style={st.homeHeader}>
+        <View style={{ flex: 1 }}>
+          <Text style={st.homeGreet}>{greet}</Text>
+          <Text style={st.homeDate}>{dateStr}</Text>
         </View>
-        <TouchableOpacity onPress={onSettings}><Text style={st.icon}>⚙️</Text></TouchableOpacity>
+        <TouchableOpacity onPress={onSettings}
+          style={{ backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, padding: 8 }}>
+          <Text style={{ fontSize: 20 }}>⚙️</Text>
+        </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={st.content}>
+      {/* ── Stats row ── */}
+      <View style={st.statsRow}>
+        <View style={[st.statBox, { backgroundColor: '#EEF2FF' }]}>
+          <Text style={[st.statNum, { color: '#4F46E5' }]}>{done}/{tasks.length}</Text>
+          <Text style={st.statLabel}>задач сегодня</Text>
+        </View>
+        <View style={[st.statBox, { backgroundColor: '#FEF3C7' }]}>
+          <Text style={[st.statNum, { color: '#D97706' }]}>{weekDone}</Text>
+          <Text style={st.statLabel}>за неделю</Text>
+        </View>
+        <View style={[st.statBox, { backgroundColor: '#FEE2E2' }]}>
+          <Text style={[st.statNum, { color: '#DC2626' }]}>{topStreak > 0 ? `🔥${topStreak}` : '—'}</Text>
+          <Text style={st.statLabel}>лучший стрик</Text>
+        </View>
+        {todayMood && (
+          <View style={[st.statBox, { backgroundColor: '#D1FAE5' }]}>
+            <Text style={[st.statNum, { color: '#059669' }]}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
+            <Text style={st.statLabel}>настроение</Text>
+          </View>
+        )}
+      </View>
+
+      <ScrollView contentContainerStyle={[st.content, { paddingBottom: 80 }]}>
         {!hasKey && (
           <TouchableOpacity style={st.warnCard} onPress={onSettings}>
             <Text style={st.warnText}>⚠️ Добавь API ключ в настройках — нажми сюда →</Text>
           </TouchableOpacity>
         )}
 
-        {/* Mood tracker */}
-        {todayMood ? (
-          <View style={[st.card, { flexDirection: 'row', alignItems: 'center' }]}>
-            <Text style={{ fontSize: 28, marginRight: 12 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '600', color: '#111827' }}>Настроение сегодня</Text>
-              <Text style={{ color: '#6B7280', fontSize: 13 }}>
-                Настроение: {MOOD_EMOJIS[todayMood.mood - 1]}  ·  Энергия: {ENERGY_ICONS[todayMood.energy - 1]}
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setTodayMood(null)}>
-              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>Изменить</Text>
-            </TouchableOpacity>
+        {/* Quick win */}
+        {quickWin ? (
+          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B' }]}>
+            <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginBottom: 6, letterSpacing: 0.5 }}>
+              ⚡ БЫСТРАЯ ПОБЕДА · 5 МИН
+            </Text>
+            <Text style={{ fontSize: 15, color: '#111827', lineHeight: 22 }}>{quickWin}</Text>
           </View>
-        ) : (
-          <View style={st.card}>
-            <Text style={st.cardTitle}>🌡️ Как ты сегодня?</Text>
+        ) : null}
+
+        {/* Mood tracker */}
+        {!todayMood ? (
+          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
+            <Text style={st.sectionPill}>🌡️ Как ты сегодня?</Text>
             <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Настроение</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
               {MOOD_EMOJIS.map((e, i) => (
                 <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, mood: i + 1 }))}
                   style={{ alignItems: 'center', padding: 6, borderRadius: 12,
@@ -395,7 +566,7 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
             <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
               {ENERGY_ICONS.map((e, i) => (
                 <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, energy: i + 1 }))}
-                  style={{ alignItems: 'center', padding: 6, borderRadius: 12,
+                  style={{ alignItems: 'center', padding: 8, borderRadius: 12,
                     backgroundColor: draftMood.energy === i + 1 ? '#EEF2FF' : 'transparent' }}>
                   <Text style={{ fontSize: 22 }}>{e}</Text>
                 </TouchableOpacity>
@@ -407,31 +578,45 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
               <Text style={st.primaryBtnText}>Сохранить</Text>
             </TouchableOpacity>
           </View>
+        ) : (
+          <View style={[st.card, { flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
+            <Text style={{ fontSize: 30, marginRight: 12 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontWeight: '700', color: '#111827' }}>Самочувствие сегодня</Text>
+              <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 2 }}>
+                {MOOD_EMOJIS[todayMood.mood - 1]} настроение  ·  {ENERGY_ICONS[todayMood.energy - 1]} энергия
+              </Text>
+            </View>
+            <TouchableOpacity onPress={() => setTodayMood(null)}>
+              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>изменить</Text>
+            </TouchableOpacity>
+          </View>
         )}
 
-        <View style={st.card}>
-          <Text style={st.cardTitle}>Задачи на сегодня</Text>
+        {/* Tasks */}
+        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#4F46E5' }]}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={st.cardTitle}>✅ Задачи на сегодня</Text>
+            <Text style={{ fontSize: 13, color: '#6B7280' }}>{done} / {tasks.length}</Text>
+          </View>
           <View style={st.progBar}>
             <View style={[st.progFill, { width: tasks.length ? `${(done / tasks.length) * 100}%` as any : '0%' }]} />
           </View>
-          <Text style={st.progText}>{done} из {tasks.length} выполнено</Text>
         </View>
 
         {tasks.length === 0 ? (
-          <View style={[st.card, { alignItems: 'center', paddingVertical: 32 }]}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>🤖</Text>
-            <Text style={[st.cardTitle, { textAlign: 'center' }]}>Нет задач на сегодня</Text>
-            <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 20, marginTop: 4 }}>
-              Пройди утренний чек-ин с коучем
+          <View style={[st.card, { alignItems: 'center', paddingVertical: 28 }]}>
+            <Text style={{ fontSize: 44, marginBottom: 10 }}>🤖</Text>
+            <Text style={[st.cardTitle, { textAlign: 'center', marginBottom: 6 }]}>Нет задач на сегодня</Text>
+            <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 18, fontSize: 14 }}>
+              Пройди утренний чек-ин — коуч составит план
             </Text>
-            <TouchableOpacity style={st.primaryBtn}
-              onPress={() => { setCheckinType('daily'); setShowCheckin(true); if (!msgs.length) startDailyCheckin(); }}>
-              <Text style={st.primaryBtnText}>Начать чек-ин</Text>
+            <TouchableOpacity style={st.primaryBtn} onPress={() => openCheckin('daily')}>
+              <Text style={st.primaryBtnText}>☀️ Начать чек-ин</Text>
             </TouchableOpacity>
           </View>
         ) : (
           <>
-            <Text style={st.sectionLabel}>Мои задачи</Text>
             {tasks.map(task => (
               <TouchableOpacity key={task.id} style={st.taskRow} onPress={() => toggleTask(task.id)} activeOpacity={0.7}>
                 <View style={[st.checkbox, task.done && st.checkboxDone]}>
@@ -444,23 +629,42 @@ function HomeScreen({ onSettings }: { onSettings: () => void }) {
         )}
 
         {done > 0 && done === tasks.length && (
-          <View style={[st.card, { backgroundColor: '#D1FAE5', alignItems: 'center', marginTop: 8 }]}>
-            <Text style={{ fontSize: 36, marginBottom: 6 }}>🎉</Text>
-            <Text style={{ fontWeight: '700', color: '#065F46', fontSize: 16 }}>Все задачи выполнены!</Text>
-            <Text style={{ color: '#047857', marginTop: 4 }}>Отличная работа сегодня!</Text>
+          <View style={[st.card, { backgroundColor: '#D1FAE5', alignItems: 'center' }]}>
+            <Text style={{ fontSize: 36, marginBottom: 4 }}>🏆</Text>
+            <Text style={{ fontWeight: '800', color: '#065F46', fontSize: 16 }}>Все задачи выполнены!</Text>
+            <Text style={{ color: '#047857', marginTop: 4, fontSize: 14 }}>Ты сегодня огонь 🔥</Text>
           </View>
         )}
 
-        <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#F3F4F6', marginTop: 4 }]}
-          onPress={() => { setCheckinType('weekly'); setShowCheckin(true); startWeeklyReview(); }}>
-          <Text style={[st.primaryBtnText, { color: '#4F46E5' }]}>📊 Разбор недели</Text>
-        </TouchableOpacity>
+        {/* Actions row */}
+        <Text style={[st.sectionLabel, { marginTop: 8 }]}>Действия</Text>
+        <View style={{ flexDirection: 'row', gap: 10, marginBottom: 8 }}>
+          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#EEF2FF' }]}
+            onPress={() => openCheckin('weekly')}>
+            <Text style={{ fontSize: 22 }}>📊</Text>
+            <Text style={[st.actionBtnText, { color: '#4F46E5' }]}>Разбор{'\n'}недели</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#FDF4FF' }]}
+            onPress={() => openCheckin('evening')}>
+            <Text style={{ fontSize: 22 }}>🌙</Text>
+            <Text style={[st.actionBtnText, { color: '#7C3AED' }]}>Вечерний{'\n'}ритуал</Text>
+          </TouchableOpacity>
+          <TouchableOpacity style={[st.actionBtn, { backgroundColor: '#FEF3C7' }]}
+            onPress={() => openCheckin('daily')}>
+            <Text style={{ fontSize: 22 }}>☀️</Text>
+            <Text style={[st.actionBtnText, { color: '#D97706' }]}>Утренний{'\n'}чек-ин</Text>
+          </TouchableOpacity>
+        </View>
       </ScrollView>
 
+      {/* Pomodoro FAB */}
+      <PomodoroTimer />
+
+      {/* Checkin Modal */}
       <Modal visible={showCheckin} animationType="slide" presentationStyle="pageSheet">
         <SafeAreaView style={st.safe}>
           <View style={st.modalHeader}>
-            <Text style={st.modalTitle}>{checkinType === 'daily' ? '☀️ Утренний чек-ин' : '📊 Разбор недели'}</Text>
+            <Text style={st.modalTitle}>{checkinTitle[checkinType]}</Text>
             <TouchableOpacity onPress={closeCheckin}>
               <Text style={{ color: '#4F46E5', fontWeight: '600', fontSize: 16 }}>Готово</Text>
             </TouchableOpacity>
@@ -766,15 +970,30 @@ function HabitsScreen() {
   );
 }
 
+const GOAL_COLORS: Record<string, { border: string; bg: string; text: string }> = {
+  day:      { border: '#F59E0B', bg: '#FFFBEB', text: '#92400E' },
+  week:     { border: '#10B981', bg: '#ECFDF5', text: '#065F46' },
+  month:    { border: '#3B82F6', bg: '#EFF6FF', text: '#1E40AF' },
+  year:     { border: '#4F46E5', bg: '#EEF2FF', text: '#3730A3' },
+  fiveYear: { border: '#7C3AED', bg: '#F5F3FF', text: '#4C1D95' },
+};
+
 // ─── Goals ────────────────────────────────────────────────────────────────────
 function GoalsScreen({ onSettings }: { onSettings: () => void }) {
-  const [goals, setGoals] = useState<Goals>({ day: [], week: [], month: [], year: [], fiveYear: [] });
-  const [editingKey, setEditingKey] = useState<keyof Goals | null>(null);
-  const [draft, setDraft] = useState('');
+  const [goals,       setGoals]       = useState<Goals>({ day: [], week: [], month: [], year: [], fiveYear: [], antiGoals: [] });
+  const [editingKey,  setEditingKey]  = useState<string | null>(null);
+  const [draft,       setDraft]       = useState('');
+  const [commitment,  setCommitment]  = useState<Commitment | null>(null);
+  const [commDraft,   setCommDraft]   = useState('');
+  const [commDate,    setCommDate]    = useState('');
+  const [editComm,    setEditComm]    = useState(false);
 
-  useEffect(() => { storage.getGoals().then(setGoals); }, []);
+  useEffect(() => {
+    storage.getGoals().then(setGoals);
+    storage.getCommitment().then(setCommitment);
+  }, []);
 
-  async function saveGoal(key: keyof Goals) {
+  async function saveGoal(key: string) {
     const vals = draft.split('\n').map(s => s.trim()).filter(Boolean);
     const updated = { ...goals, [key]: vals };
     setGoals(updated);
@@ -782,58 +1001,175 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
     setEditingKey(null);
   }
 
+  async function saveCommitment() {
+    if (!commDraft.trim()) return;
+    const c: Commitment = { text: commDraft.trim(), deadline: commDate, createdAt: todayString() };
+    await storage.saveCommitment(c);
+    setCommitment(c); setEditComm(false);
+  }
+
+  const daysLeft = (c: Commitment) => {
+    if (!c.deadline) return null;
+    const d = Math.ceil((new Date(c.deadline).getTime() - Date.now()) / 86400000);
+    return d;
+  };
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={st.topBar}>
-        <Text style={st.screenTitle}>Мои цели</Text>
+        <Text style={st.screenTitle}>🎯 Мои цели</Text>
         <TouchableOpacity onPress={onSettings}><Text style={st.icon}>⚙️</Text></TouchableOpacity>
       </View>
       <ScrollView contentContainerStyle={st.content}>
-        <Text style={st.hint}>Нажми «Изменить» чтобы редактировать. Коуч использует эти цели для составления задач.</Text>
-        {GOAL_LABELS.map(({ key, emoji, title }) => (
-          <View key={key} style={st.card}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <Text style={{ fontSize: 22, marginRight: 8 }}>{emoji}</Text>
-              <Text style={[st.cardTitle, { flex: 1 }]}>{title}</Text>
-              <TouchableOpacity onPress={() => {
-                if (editingKey === key) { setEditingKey(null); }
-                else { setDraft(goals[key].join('\n')); setEditingKey(key); }
-              }}>
-                <Text style={{ color: '#4F46E5', fontWeight: '500', fontSize: 14 }}>
-                  {editingKey === key ? 'Отмена' : 'Изменить'}
-                </Text>
+
+        {/* Commitment card */}
+        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#EF4444' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <Text style={[st.cardTitle, { flex: 1 }]}>🤝 Моё обязательство</Text>
+            <TouchableOpacity onPress={() => {
+              setCommDraft(commitment?.text || '');
+              setCommDate(commitment?.deadline || '');
+              setEditComm(!editComm);
+            }}>
+              <Text style={{ color: '#EF4444', fontWeight: '600', fontSize: 14 }}>
+                {editComm ? 'Отмена' : commitment ? 'Изменить' : '+ Добавить'}
+              </Text>
+            </TouchableOpacity>
+          </View>
+          {editComm ? (
+            <>
+              <TextInput style={[st.obInput, { minHeight: 70, textAlignVertical: 'top' }]}
+                value={commDraft} onChangeText={setCommDraft} multiline
+                placeholder="Я обязуюсь... к такому-то результату" placeholderTextColor="#9CA3AF" autoFocus />
+              <Text style={st.fieldLabel}>Дедлайн (ГГГГ-ММ-ДД)</Text>
+              <TextInput style={st.obInput} value={commDate} onChangeText={setCommDate}
+                placeholder="2025-12-31" placeholderTextColor="#9CA3AF" />
+              <TouchableOpacity style={st.primaryBtn} onPress={saveCommitment}>
+                <Text style={st.primaryBtnText}>Зафиксировать</Text>
               </TouchableOpacity>
-            </View>
-            {editingKey === key ? (
-              <>
-                <View style={st.voiceInputWrap}>
-                  <TextInput
-                    style={[st.obInput, { minHeight: 90, textAlignVertical: 'top', marginBottom: 0, flex: 1 }]}
-                    value={draft} onChangeText={setDraft} multiline
-                    placeholder="Каждая цель — отдельная строка..." placeholderTextColor="#9CA3AF"
-                  />
-                  <View style={{ justifyContent: 'flex-end', paddingLeft: 8, paddingBottom: 4 }}>
-                    <MicButton onText={t => setDraft(prev => prev ? prev + '\n' + t : t)} />
+            </>
+          ) : commitment ? (
+            <>
+              <Text style={{ fontSize: 15, color: '#111827', lineHeight: 22, marginBottom: 6 }}>
+                {commitment.text}
+              </Text>
+              {daysLeft(commitment) !== null && (
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <View style={{ backgroundColor: daysLeft(commitment)! > 7 ? '#FEE2E2' : '#FEF3C7',
+                    borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
+                    <Text style={{ fontSize: 13, fontWeight: '700',
+                      color: daysLeft(commitment)! > 7 ? '#DC2626' : '#D97706' }}>
+                      ⏰ {daysLeft(commitment)} {daysLeft(commitment) === 1 ? 'день' : 'дней'} до дедлайна
+                    </Text>
                   </View>
                 </View>
-                <TouchableOpacity style={[st.primaryBtn, { marginTop: 8 }]} onPress={() => saveGoal(key)}>
-                  <Text style={st.primaryBtnText}>Сохранить</Text>
-                </TouchableOpacity>
-              </>
-            ) : goals[key].length === 0 ? (
-              <Text style={{ color: '#9CA3AF', fontStyle: 'italic', fontSize: 14 }}>
-                Цели не добавлены. Нажми «Изменить».
-              </Text>
-            ) : (
-              goals[key].map((g, i) => (
-                <View key={i} style={{ flexDirection: 'row', marginVertical: 3 }}>
-                  <Text style={{ color: '#4F46E5', marginRight: 8, fontSize: 16 }}>•</Text>
-                  <Text style={{ flex: 1, color: '#374151', fontSize: 15, lineHeight: 22 }}>{g}</Text>
+              )}
+            </>
+          ) : (
+            <Text style={{ color: '#9CA3AF', fontSize: 14, fontStyle: 'italic' }}>
+              Публичное обязательство с дедлайном — мощный инструмент. Добавь своё.
+            </Text>
+          )}
+        </View>
+
+        {/* Goals */}
+        {GOAL_LABELS.map(({ key, emoji, title }) => {
+          const c = GOAL_COLORS[key] || { border: '#4F46E5', bg: '#EEF2FF', text: '#3730A3' };
+          return (
+            <View key={key} style={[st.card, { borderLeftWidth: 4, borderLeftColor: c.border }]}>
+              <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+                <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: c.bg,
+                  alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+                  <Text style={{ fontSize: 18 }}>{emoji}</Text>
                 </View>
-              ))
-            )}
+                <Text style={[st.cardTitle, { flex: 1, color: c.text }]}>{title}</Text>
+                <TouchableOpacity onPress={() => {
+                  if (editingKey === key) { setEditingKey(null); }
+                  else { setDraft((goals as any)[key].join('\n')); setEditingKey(key); }
+                }}>
+                  <Text style={{ color: c.border, fontWeight: '600', fontSize: 14 }}>
+                    {editingKey === key ? 'Отмена' : 'Изменить'}
+                  </Text>
+                </TouchableOpacity>
+              </View>
+              {editingKey === key ? (
+                <>
+                  <View style={st.voiceInputWrap}>
+                    <TextInput
+                      style={[st.obInput, { minHeight: 90, textAlignVertical: 'top', marginBottom: 0, flex: 1 }]}
+                      value={draft} onChangeText={setDraft} multiline
+                      placeholder="Каждая цель — отдельная строка..." placeholderTextColor="#9CA3AF"
+                    />
+                    <View style={{ justifyContent: 'flex-end', paddingLeft: 8, paddingBottom: 4 }}>
+                      <MicButton onText={t => setDraft(prev => prev ? prev + '\n' + t : t)} />
+                    </View>
+                  </View>
+                  <TouchableOpacity style={[st.primaryBtn, { marginTop: 8, backgroundColor: c.border }]} onPress={() => saveGoal(key)}>
+                    <Text style={st.primaryBtnText}>Сохранить</Text>
+                  </TouchableOpacity>
+                </>
+              ) : (goals as any)[key].length === 0 ? (
+                <Text style={{ color: '#9CA3AF', fontStyle: 'italic', fontSize: 14 }}>Нажми «Изменить» чтобы добавить</Text>
+              ) : (
+                (goals as any)[key].map((g: string, i: number) => (
+                  <View key={i} style={{ flexDirection: 'row', marginVertical: 3 }}>
+                    <Text style={{ color: c.border, marginRight: 8, fontSize: 16 }}>•</Text>
+                    <Text style={{ flex: 1, color: '#374151', fontSize: 15, lineHeight: 22 }}>{g}</Text>
+                  </View>
+                ))
+              )}
+            </View>
+          );
+        })}
+
+        {/* Anti-goals */}
+        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#6B7280' }]}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 8 }}>
+            <View style={{ width: 34, height: 34, borderRadius: 10, backgroundColor: '#F3F4F6',
+              alignItems: 'center', justifyContent: 'center', marginRight: 10 }}>
+              <Text style={{ fontSize: 18 }}>🚫</Text>
+            </View>
+            <Text style={[st.cardTitle, { flex: 1, color: '#374151' }]}>Чего избегать</Text>
+            <TouchableOpacity onPress={() => {
+              if (editingKey === 'antiGoals') { setEditingKey(null); }
+              else { setDraft(goals.antiGoals.join('\n')); setEditingKey('antiGoals'); }
+            }}>
+              <Text style={{ color: '#6B7280', fontWeight: '600', fontSize: 14 }}>
+                {editingKey === 'antiGoals' ? 'Отмена' : 'Изменить'}
+              </Text>
+            </TouchableOpacity>
           </View>
-        ))}
+          <Text style={{ color: '#9CA3AF', fontSize: 12, marginBottom: 8 }}>
+            Паттерны, привычки и ситуации, которые тебя тормозят
+          </Text>
+          {editingKey === 'antiGoals' ? (
+            <>
+              <View style={st.voiceInputWrap}>
+                <TextInput
+                  style={[st.obInput, { minHeight: 80, textAlignVertical: 'top', marginBottom: 0, flex: 1 }]}
+                  value={draft} onChangeText={setDraft} multiline
+                  placeholder="Прокрастинация, соц. сети с утра..." placeholderTextColor="#9CA3AF"
+                />
+                <View style={{ justifyContent: 'flex-end', paddingLeft: 8, paddingBottom: 4 }}>
+                  <MicButton onText={t => setDraft(prev => prev ? prev + '\n' + t : t)} />
+                </View>
+              </View>
+              <TouchableOpacity style={[st.primaryBtn, { marginTop: 8, backgroundColor: '#374151' }]} onPress={() => saveGoal('antiGoals')}>
+                <Text style={st.primaryBtnText}>Сохранить</Text>
+              </TouchableOpacity>
+            </>
+          ) : goals.antiGoals.length === 0 ? (
+            <Text style={{ color: '#9CA3AF', fontStyle: 'italic', fontSize: 14 }}>Не добавлено. Коуч будет напоминать об этом.</Text>
+          ) : (
+            goals.antiGoals.map((g, i) => (
+              <View key={i} style={{ flexDirection: 'row', marginVertical: 3 }}>
+                <Text style={{ color: '#EF4444', marginRight: 8, fontSize: 15 }}>✗</Text>
+                <Text style={{ flex: 1, color: '#374151', fontSize: 15, lineHeight: 22 }}>{g}</Text>
+              </View>
+            ))
+          )}
+        </View>
+
       </ScrollView>
     </View>
   );
@@ -1150,6 +1486,20 @@ export default function App() {
 // ─── Styles ───────────────────────────────────────────────────────────────────
 const st = StyleSheet.create({
   safe:         { flex: 1, backgroundColor: '#F9FAFB' },
+  // Home header
+  homeHeader:   { backgroundColor: '#4F46E5', paddingHorizontal: 20, paddingTop: 20, paddingBottom: 16, flexDirection: 'row', alignItems: 'center' },
+  homeGreet:    { fontSize: 22, fontWeight: '800', color: '#fff' },
+  homeDate:     { fontSize: 13, color: 'rgba(255,255,255,0.75)', marginTop: 2, textTransform: 'capitalize' },
+  // Stats
+  statsRow:     { flexDirection: 'row', backgroundColor: '#4F46E5', paddingHorizontal: 12, paddingBottom: 16, gap: 8 },
+  statBox:      { flex: 1, borderRadius: 14, padding: 10, alignItems: 'center' },
+  statNum:      { fontSize: 18, fontWeight: '800' },
+  statLabel:    { fontSize: 10, color: '#6B7280', marginTop: 2, textAlign: 'center', fontWeight: '500' },
+  // Section pill
+  sectionPill:  { fontSize: 15, fontWeight: '700', color: '#111827', marginBottom: 8 },
+  // Action buttons
+  actionBtn:    { flex: 1, borderRadius: 16, padding: 14, alignItems: 'center', gap: 6 },
+  actionBtnText:{ fontSize: 12, fontWeight: '700', textAlign: 'center' },
   // Onboarding
   obWrap:       { padding: 24, paddingTop: 48, alignItems: 'center' },
   dots:         { flexDirection: 'row', gap: 8, marginBottom: 32 },
