@@ -21,6 +21,14 @@ export interface Task {
   date: string;
 }
 
+export type ProviderId = 'groq' | 'gemini' | 'openrouter' | 'deepseek' | 'yandex';
+
+export interface ProviderSettings {
+  activeProvider: ProviderId;
+  keys: Partial<Record<ProviderId, string>>;
+  models: Partial<Record<ProviderId, string>>;
+}
+
 const KEYS = {
   GOALS: '@goals',
   HISTORY: '@chat_history',
@@ -28,6 +36,13 @@ const KEYS = {
   TASKS: '@tasks',
   ONBOARDED: '@onboarded',
   API_KEY: '@api_key',
+  PROVIDER: '@provider_settings',
+};
+
+const DEFAULT_PROVIDER: ProviderSettings = {
+  activeProvider: 'groq',
+  keys: {},
+  models: {},
 };
 
 export const storage = {
@@ -46,7 +61,6 @@ export const storage = {
   },
 
   async saveHistory(messages: Message[]): Promise<void> {
-    // Keep last 100 messages to avoid excessive storage
     const trimmed = messages.slice(-100);
     await AsyncStorage.setItem(KEYS.HISTORY, JSON.stringify(trimmed));
   },
@@ -89,18 +103,53 @@ export const storage = {
     await AsyncStorage.setItem(KEYS.ONBOARDED, 'true');
   },
 
+  // Legacy single key — used on onboarding step 0
   async getApiKey(): Promise<string | null> {
-    return AsyncStorage.getItem(KEYS.API_KEY);
+    const ps = await storage.getProviderSettings();
+    const key = ps.keys[ps.activeProvider];
+    return key || AsyncStorage.getItem(KEYS.API_KEY);
   },
 
   async saveApiKey(key: string): Promise<void> {
     await AsyncStorage.setItem(KEYS.API_KEY, key);
+    // Auto-detect provider from key prefix and save
+    const provider = detectProvider(key);
+    const ps = await storage.getProviderSettings();
+    ps.keys[provider] = key;
+    ps.activeProvider = provider;
+    await storage.saveProviderSettings(ps);
+  },
+
+  async getProviderSettings(): Promise<ProviderSettings> {
+    const raw = await AsyncStorage.getItem(KEYS.PROVIDER);
+    if (!raw) {
+      // Migrate legacy API key
+      const legacyKey = await AsyncStorage.getItem(KEYS.API_KEY);
+      if (legacyKey) {
+        const provider = detectProvider(legacyKey);
+        return { activeProvider: provider, keys: { [provider]: legacyKey }, models: {} };
+      }
+      return { ...DEFAULT_PROVIDER };
+    }
+    return JSON.parse(raw);
+  },
+
+  async saveProviderSettings(settings: ProviderSettings): Promise<void> {
+    await AsyncStorage.setItem(KEYS.PROVIDER, JSON.stringify(settings));
   },
 
   async clearAll(): Promise<void> {
     await AsyncStorage.multiRemove(Object.values(KEYS));
   },
 };
+
+export function detectProvider(key: string): ProviderId {
+  if (key.startsWith('gsk_')) return 'groq';
+  if (key.startsWith('AIza')) return 'gemini';
+  if (key.startsWith('sk-or-')) return 'openrouter';
+  if (key.startsWith('y1_') || key.startsWith('AQVN') || key.startsWith('t1.')) return 'yandex';
+  return 'deepseek';
+}
 
 export function todayString(): string {
   return new Date().toISOString().split('T')[0];

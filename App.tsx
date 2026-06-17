@@ -5,8 +5,8 @@ import {
   SafeAreaView, Alert
 } from 'react-native';
 import { StatusBar } from 'expo-status-bar';
-import { storage, Goals, Message, Task, todayString } from './services/storage';
-import { sendMessage, sendSystemMessage } from './services/ai';
+import { storage, Goals, Task, todayString, ProviderId, ProviderSettings } from './services/storage';
+import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT } from './constants/prompts';
 
 type Screen = 'home' | 'chat' | 'goals' | 'settings' | 'onboarding';
@@ -416,27 +416,51 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
 function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () => void }) {
-  const [apiKey, setApiKey] = useState('');
-  const [saved, setSaved] = useState(false);
+  const [ps, setPs] = useState<ProviderSettings>({ activeProvider: 'groq', keys: {}, models: {} });
+  const [savedId, setSavedId] = useState<ProviderId | null>(null);
+  const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
+  const [draftKeys, setDraftKeys] = useState<Partial<Record<ProviderId, string>>>({});
+  const [draftModels, setDraftModels] = useState<Partial<Record<ProviderId, string>>>({});
 
-  useEffect(() => { storage.getApiKey().then(k => setApiKey(k || '')); }, []);
+  useEffect(() => {
+    storage.getProviderSettings().then(s => {
+      setPs(s);
+      setDraftKeys(s.keys);
+      setDraftModels(s.models);
+    });
+  }, []);
 
-  async function handleSave() {
-    await storage.saveApiKey(apiKey.trim());
-    setSaved(true); setTimeout(() => setSaved(false), 2000);
+  async function saveProvider(id: ProviderId) {
+    const updated: ProviderSettings = {
+      ...ps,
+      activeProvider: id,
+      keys: { ...ps.keys, [id]: draftKeys[id] || '' },
+      models: { ...ps.models, [id]: draftModels[id] || '' },
+    };
+    setPs(updated);
+    await storage.saveProviderSettings(updated);
+    setSavedId(id); setTimeout(() => setSavedId(null), 2000);
+  }
+
+  async function setActive(id: ProviderId) {
+    const updated = { ...ps, activeProvider: id };
+    setPs(updated);
+    await storage.saveProviderSettings(updated);
   }
 
   function handleReset() {
-    Alert.alert('Сбросить данные?', 'Удалятся вся история и задачи. API ключ сохранится.', [
+    Alert.alert('Сбросить данные?', 'Удалятся история и задачи. Ключи останутся.', [
       { text: 'Отмена', style: 'cancel' },
       { text: 'Сбросить', style: 'destructive', onPress: async () => {
-        const key = await storage.getApiKey();
+        const saved = await storage.getProviderSettings();
         await storage.clearAll();
-        if (key) await storage.saveApiKey(key);
+        await storage.saveProviderSettings(saved);
         onReset();
       }},
     ]);
   }
+
+  const activeInfo = PROVIDERS.find(p => p.id === ps.activeProvider)!;
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -447,34 +471,121 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
         <Text style={st.screenTitle}>Настройки</Text>
         <View style={{ width: 70 }} />
       </View>
-      <ScrollView contentContainerStyle={[st.content, { gap: 16 }]}>
-        <View style={st.card}>
-          <Text style={st.cardTitle}>🔑 API Ключ ИИ</Text>
-          <Text style={{ color: '#6B7280', lineHeight: 22, marginBottom: 14, fontSize: 14 }}>
-            {'🟢 Groq — бесплатно: console.groq.com\n   Ключ начинается с gsk_\n\n🔵 DeepSeek — почти бесплатно:\n   platform.deepseek.com\n   Ключ начинается с sk-'}
+      <ScrollView contentContainerStyle={[st.content, { gap: 12 }]}>
+
+        {/* Active provider banner */}
+        <View style={[st.card, { backgroundColor: '#EEF2FF', borderWidth: 1.5, borderColor: '#4F46E5' }]}>
+          <Text style={{ fontSize: 13, color: '#4F46E5', fontWeight: '600', marginBottom: 4 }}>АКТИВНЫЙ ИИ</Text>
+          <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>{activeInfo.name}</Text>
+          <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
+            Модель: {ps.models[ps.activeProvider] || activeInfo.defaultModel}
           </Text>
-          <TextInput
-            style={[st.obInput, { marginBottom: 12 }]}
-            value={apiKey} onChangeText={setApiKey}
-            placeholder="gsk_... или sk-..." placeholderTextColor="#9CA3AF"
-            secureTextEntry autoCapitalize="none"
-          />
-          <TouchableOpacity style={[st.primaryBtn, saved && { backgroundColor: '#10B981' }]} onPress={handleSave}>
-            <Text style={st.primaryBtnText}>{saved ? '✓ Сохранено!' : 'Сохранить ключ'}</Text>
-          </TouchableOpacity>
         </View>
+
+        <Text style={[st.sectionLabel, { marginBottom: 0 }]}>Выбери ИИ провайдера</Text>
+
+        {PROVIDERS.map(provider => {
+          const isActive = ps.activeProvider === provider.id;
+          const hasKey = !!(ps.keys[provider.id]);
+          const isOpen = expandedId === provider.id;
+          const curModel = draftModels[provider.id] || provider.defaultModel;
+
+          return (
+            <View key={provider.id} style={[st.card, isActive && { borderWidth: 1.5, borderColor: '#4F46E5' }]}>
+              {/* Header row */}
+              <TouchableOpacity
+                style={{ flexDirection: 'row', alignItems: 'center' }}
+                onPress={() => setExpandedId(isOpen ? null : provider.id)}
+                activeOpacity={0.7}
+              >
+                <View style={{ flex: 1 }}>
+                  <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+                    <Text style={{ fontSize: 15, fontWeight: '700', color: '#111827' }}>{provider.name}</Text>
+                    <View style={[st.badge, { backgroundColor: provider.badgeColor }]}>
+                      <Text style={{ fontSize: 11, fontWeight: '600', color: '#374151' }}>{provider.badge}</Text>
+                    </View>
+                  </View>
+                  <Text style={{ fontSize: 13, color: '#6B7280' }}>
+                    {provider.desc}  {hasKey ? '✓ ключ есть' : '— нет ключа'}
+                  </Text>
+                </View>
+                <Text style={{ fontSize: 20, marginLeft: 8 }}>{isOpen ? '▲' : '▼'}</Text>
+              </TouchableOpacity>
+
+              {/* Expanded content */}
+              {isOpen && (
+                <View style={{ marginTop: 14 }}>
+                  {/* Key input */}
+                  <Text style={st.fieldLabel}>API Ключ</Text>
+                  <TextInput
+                    style={[st.obInput, { marginBottom: 10 }]}
+                    value={draftKeys[provider.id] || ''}
+                    onChangeText={v => setDraftKeys(p => ({ ...p, [provider.id]: v }))}
+                    placeholder={provider.keyPlaceholder}
+                    placeholderTextColor="#9CA3AF"
+                    secureTextEntry autoCapitalize="none"
+                  />
+                  <Text style={st.fieldHint}>{provider.keyHint}</Text>
+
+                  {/* Model picker */}
+                  <Text style={[st.fieldLabel, { marginTop: 12 }]}>Модель</Text>
+                  <View style={{ gap: 6 }}>
+                    {provider.models.map(m => (
+                      <TouchableOpacity
+                        key={m.id}
+                        style={[st.modelRow, curModel === m.id && st.modelRowActive]}
+                        onPress={() => setDraftModels(p => ({ ...p, [provider.id]: m.id }))}
+                      >
+                        <View style={[st.modelDot, curModel === m.id && st.modelDotActive]} />
+                        <Text style={{ fontSize: 14, color: curModel === m.id ? '#4F46E5' : '#374151', flex: 1 }}>
+                          {m.label}
+                        </Text>
+                      </TouchableOpacity>
+                    ))}
+                  </View>
+
+                  {/* Action buttons */}
+                  <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
+                    <TouchableOpacity
+                      style={[st.primaryBtn, { flex: 1 }, savedId === provider.id && { backgroundColor: '#10B981' }]}
+                      onPress={() => saveProvider(provider.id)}
+                    >
+                      <Text style={st.primaryBtnText}>
+                        {savedId === provider.id ? '✓ Сохранено' : 'Сохранить'}
+                      </Text>
+                    </TouchableOpacity>
+                    {!isActive && (
+                      <TouchableOpacity
+                        style={[st.primaryBtn, { flex: 1, backgroundColor: hasKey ? '#4F46E5' : '#E5E7EB' }]}
+                        onPress={() => hasKey ? setActive(provider.id) : Alert.alert('Сначала введи и сохрани ключ')}
+                      >
+                        <Text style={[st.primaryBtnText, !hasKey && { color: '#9CA3AF' }]}>
+                          Использовать
+                        </Text>
+                      </TouchableOpacity>
+                    )}
+                    {isActive && (
+                      <View style={[st.primaryBtn, { flex: 1, backgroundColor: '#D1FAE5' }]}>
+                        <Text style={[st.primaryBtnText, { color: '#065F46' }]}>✓ Активен</Text>
+                      </View>
+                    )}
+                  </View>
+                </View>
+              )}
+            </View>
+          );
+        })}
 
         <View style={st.card}>
           <Text style={st.cardTitle}>ℹ️ О приложении</Text>
           <Text style={{ color: '#6B7280', lineHeight: 22, fontSize: 14 }}>
             Лучшая версия себя — твой персональный ИИ-коуч.{'\n\n'}
-            Каждый день спрашивает о прогрессе, ставит конкретные задачи и помогает шаг за шагом достигать целей.{'\n\n'}
-            История хранится только на твоём устройстве.
+            Каждый день спрашивает о прогрессе, ставит задачи и помогает достигать целей. История хранится только на твоём устройстве.
           </Text>
         </View>
 
         <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#FEE2E2' }]} onPress={handleReset}>
-          <Text style={[st.primaryBtnText, { color: '#DC2626' }]}>Сбросить все данные</Text>
+          <Text style={[st.primaryBtnText, { color: '#DC2626' }]}>Сбросить историю и задачи</Text>
         </TouchableOpacity>
       </ScrollView>
     </View>
@@ -603,6 +714,14 @@ const st = StyleSheet.create({
   // Modal
   modalHeader:  { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#E5E7EB', backgroundColor: '#fff' },
   modalTitle:   { fontSize: 18, fontWeight: '700', color: '#111827' },
+  // Provider picker
+  badge:          { paddingHorizontal: 8, paddingVertical: 2, borderRadius: 20 },
+  fieldLabel:     { fontSize: 13, fontWeight: '600', color: '#374151', marginBottom: 6 },
+  fieldHint:      { fontSize: 12, color: '#9CA3AF', marginBottom: 4 },
+  modelRow:       { flexDirection: 'row', alignItems: 'center', padding: 10, borderRadius: 10, backgroundColor: '#F9FAFB', borderWidth: 1, borderColor: '#E5E7EB' },
+  modelRowActive: { backgroundColor: '#EEF2FF', borderColor: '#4F46E5' },
+  modelDot:       { width: 16, height: 16, borderRadius: 8, borderWidth: 2, borderColor: '#D1D5DB', marginRight: 10 },
+  modelDotActive: { borderColor: '#4F46E5', backgroundColor: '#4F46E5' },
   // Tab bar
   tabBar:       { flexDirection: 'row', borderTopWidth: 1, borderTopColor: '#F3F4F6', backgroundColor: '#fff', height: 62 },
   tabItem:      { flex: 1, alignItems: 'center', justifyContent: 'center', paddingVertical: 6 },
