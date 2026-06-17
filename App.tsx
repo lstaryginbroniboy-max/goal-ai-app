@@ -104,7 +104,11 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
     if (step === 0) {
       if (!selectedProvider) { Alert.alert('Выбери ИИ провайдера'); return; }
       if (!apiKey.trim()) { Alert.alert('Введи API ключ'); return; }
-      await storage.saveApiKey(apiKey.trim());
+      // Save under the explicitly selected provider, not auto-detected
+      const ps = await storage.getProviderSettings();
+      ps.keys[selectedProvider as ProviderId] = apiKey.trim();
+      ps.activeProvider = selectedProvider as ProviderId;
+      await storage.saveProviderSettings(ps);
       setStep(1);
       return;
     }
