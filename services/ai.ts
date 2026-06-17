@@ -1,6 +1,7 @@
 import axios from 'axios';
 import { storage, ProviderId } from './storage';
 import { SYSTEM_PROMPT } from '../constants/prompts';
+import { getCityTime } from '../constants/cities';
 
 export interface ProviderInfo {
   id: ProviderId;
@@ -140,17 +141,24 @@ async function getActiveConfig() {
   const apiKey = ps.keys[providerId] || '';
   const providerInfo = PROVIDERS.find(p => p.id === providerId)!;
   const model = ps.models[providerId] || providerInfo.defaultModel;
-  return { providerId, apiKey, providerInfo, model };
+  const city = await storage.getCity();
+  const systemPrompt = city
+    ? (() => {
+        const { timeStr, dateStr } = getCityTime(city);
+        return `Текущее время пользователя: ${timeStr}, ${dateStr} (${city.name}, UTC${city.utcOffset >= 0 ? '+' : ''}${city.utcOffset}).\n\n${SYSTEM_PROMPT}`;
+      })()
+    : SYSTEM_PROMPT;
+  return { providerId, apiKey, providerInfo, model, systemPrompt };
 }
 
 export async function sendMessage(userText: string): Promise<string> {
-  const { providerId, apiKey, providerInfo, model } = await getActiveConfig();
+  const { providerId, apiKey, providerInfo, model, systemPrompt } = await getActiveConfig();
 
   if (!apiKey) return 'Пожалуйста, добавь API ключ в настройках ⚙️';
 
   const history = await storage.getHistory();
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     ...history.filter(m => m.role !== 'system').slice(-20).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: userText },
   ];
@@ -174,12 +182,12 @@ export async function sendMessage(userText: string): Promise<string> {
 }
 
 export async function sendSystemMessage(systemContent: string): Promise<string> {
-  const { providerId, apiKey, providerInfo, model } = await getActiveConfig();
+  const { providerId, apiKey, providerInfo, model, systemPrompt } = await getActiveConfig();
   if (!apiKey) return '';
 
   const history = await storage.getHistory();
   const messages = [
-    { role: 'system', content: SYSTEM_PROMPT },
+    { role: 'system', content: systemPrompt },
     ...history.filter(m => m.role !== 'system').slice(-10).map(m => ({ role: m.role, content: m.content })),
     { role: 'user', content: systemContent },
   ];

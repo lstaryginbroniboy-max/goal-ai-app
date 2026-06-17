@@ -1,4 +1,5 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
+import { City } from '../constants/cities';
 
 export interface Goals {
   day: string[];
@@ -37,6 +38,7 @@ const KEYS = {
   ONBOARDED: '@onboarded',
   API_KEY: '@api_key',
   PROVIDER: '@provider_settings',
+  CITY: '@city_tz',
 };
 
 const DEFAULT_PROVIDER: ProviderSettings = {
@@ -136,6 +138,15 @@ export const storage = {
 
   async saveProviderSettings(settings: ProviderSettings): Promise<void> {
     await AsyncStorage.setItem(KEYS.PROVIDER, JSON.stringify(settings));
+  },
+
+  async getCity(): Promise<City | null> {
+    const raw = await AsyncStorage.getItem(KEYS.CITY);
+    return raw ? JSON.parse(raw) : null;
+  },
+
+  async saveCity(city: City): Promise<void> {
+    await AsyncStorage.setItem(KEYS.CITY, JSON.stringify(city));
   },
 
   async clearAll(): Promise<void> {

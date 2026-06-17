@@ -8,6 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { storage, Goals, Task, todayString, ProviderId, ProviderSettings } from './services/storage';
 import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT } from './constants/prompts';
+import { CITIES, City, getCityTime } from './constants/cities';
 
 type Screen = 'home' | 'chat' | 'goals' | 'settings' | 'onboarding';
 
@@ -560,6 +561,8 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
   const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
   const [draftKeys, setDraftKeys] = useState<Partial<Record<ProviderId, string>>>({});
   const [draftModels, setDraftModels] = useState<Partial<Record<ProviderId, string>>>({});
+  const [city, setCity] = useState<City | null>(null);
+  const [showCityPicker, setShowCityPicker] = useState(false);
 
   useEffect(() => {
     storage.getProviderSettings().then(s => {
@@ -567,6 +570,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
       setDraftKeys(s.keys);
       setDraftModels(s.models);
     });
+    storage.getCity().then(setCity);
   }, []);
 
   async function saveProvider(id: ProviderId) {
@@ -715,6 +719,29 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           );
         })}
 
+        {/* City / timezone */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>🌍 Часовой пояс</Text>
+          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>
+            ИИ будет знать твоё текущее время и адаптировать советы под день/вечер/утро
+          </Text>
+          {city ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{city.name}</Text>
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>
+                  UTC{city.utcOffset >= 0 ? '+' : ''}{city.utcOffset}  ·  сейчас {getCityTime(city).timeStr}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 10 }}>Город не выбран</Text>
+          )}
+          <TouchableOpacity style={st.primaryBtn} onPress={() => setShowCityPicker(true)}>
+            <Text style={st.primaryBtnText}>{city ? 'Изменить город' : 'Выбрать город'}</Text>
+          </TouchableOpacity>
+        </View>
+
         <View style={st.card}>
           <Text style={st.cardTitle}>ℹ️ О приложении</Text>
           <Text style={{ color: '#6B7280', lineHeight: 22, fontSize: 14 }}>
@@ -727,6 +754,43 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           <Text style={[st.primaryBtnText, { color: '#DC2626' }]}>Сбросить историю и задачи</Text>
         </TouchableOpacity>
       </ScrollView>
+
+      {/* City picker modal */}
+      <Modal visible={showCityPicker} animationType="slide" transparent onRequestClose={() => setShowCityPicker(false)}>
+        <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.4)', justifyContent: 'flex-end' }}>
+          <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '80%' }}>
+            <View style={st.modalHeader}>
+              <Text style={st.modalTitle}>🌍 Выбери город</Text>
+              <TouchableOpacity onPress={() => setShowCityPicker(false)}>
+                <Text style={{ fontSize: 22, color: '#6B7280' }}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            <ScrollView>
+              {CITIES.map(c => {
+                const isSelected = city?.name === c.name;
+                return (
+                  <TouchableOpacity
+                    key={c.name}
+                    style={{ flexDirection: 'row', alignItems: 'center', paddingHorizontal: 20, paddingVertical: 14, borderBottomWidth: 1, borderBottomColor: '#F3F4F6', backgroundColor: isSelected ? '#F5F3FF' : '#fff' }}
+                    onPress={async () => {
+                      await storage.saveCity(c);
+                      setCity(c);
+                      setShowCityPicker(false);
+                    }}
+                  >
+                    <View style={{ flex: 1 }}>
+                      <Text style={{ fontSize: 16, fontWeight: isSelected ? '700' : '400', color: isSelected ? '#4F46E5' : '#111827' }}>{c.name}</Text>
+                      <Text style={{ fontSize: 13, color: '#9CA3AF' }}>UTC{c.utcOffset >= 0 ? '+' : ''}{c.utcOffset} · {getCityTime(c).timeStr}</Text>
+                    </View>
+                    {isSelected && <Text style={{ fontSize: 20 }}>✓</Text>}
+                  </TouchableOpacity>
+                );
+              })}
+              <View style={{ height: 30 }} />
+            </ScrollView>
+          </View>
+        </View>
+      </Modal>
     </View>
   );
 }
