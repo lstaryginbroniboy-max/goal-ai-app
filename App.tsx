@@ -1557,11 +1557,19 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
     setCommitment(c); setEditComm(false);
   }
 
-  const daysLeft = (c: Commitment) => {
+  const daysLeft = (c: Commitment): number | null => {
     if (!c.deadline) return null;
-    const d = Math.ceil((new Date(c.deadline).getTime() - Date.now()) / 86400000);
-    return d;
+    let date = new Date(c.deadline);
+    // Поддержка формата ДД.ММ.ГГГГ
+    if (isNaN(date.getTime())) {
+      const p = c.deadline.split('.');
+      if (p.length === 3) date = new Date(`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`);
+    }
+    if (isNaN(date.getTime())) return null;
+    return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
   };
+
+  const daysWord = (n: number) => n === 1 ? 'день' : n >= 2 && n <= 4 ? 'дня' : 'дней';
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -1589,9 +1597,9 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
               <TextInput style={[st.obInput, { minHeight: 70, textAlignVertical: 'top' }]}
                 value={commDraft} onChangeText={setCommDraft} multiline
                 placeholder="Я обязуюсь... к такому-то результату" placeholderTextColor="#9CA3AF" autoFocus />
-              <Text style={st.fieldLabel}>Дедлайн (ГГГГ-ММ-ДД)</Text>
+              <Text style={st.fieldLabel}>Дедлайн (ДД.ММ.ГГГГ или ГГГГ-ММ-ДД)</Text>
               <TextInput style={st.obInput} value={commDate} onChangeText={setCommDate}
-                placeholder="2025-12-31" placeholderTextColor="#9CA3AF" />
+                placeholder="31.12.2025" placeholderTextColor="#9CA3AF" />
               <TouchableOpacity style={st.primaryBtn} onPress={saveCommitment}>
                 <Text style={st.primaryBtnText}>Зафиксировать</Text>
               </TouchableOpacity>
@@ -1601,17 +1609,17 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
               <Text style={{ fontSize: 15, color: '#111827', lineHeight: 22, marginBottom: 6 }}>
                 {commitment.text}
               </Text>
-              {daysLeft(commitment) !== null && (
+              {(() => { const d = daysLeft(commitment); return d !== null ? (
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
-                  <View style={{ backgroundColor: daysLeft(commitment)! > 7 ? '#FEE2E2' : '#FEF3C7',
+                  <View style={{ backgroundColor: d > 7 ? '#FEE2E2' : '#FEF3C7',
                     borderRadius: 8, paddingHorizontal: 10, paddingVertical: 4 }}>
                     <Text style={{ fontSize: 13, fontWeight: '700',
-                      color: daysLeft(commitment)! > 7 ? '#DC2626' : '#D97706' }}>
-                      ⏰ {daysLeft(commitment)} {daysLeft(commitment) === 1 ? 'день' : 'дней'} до дедлайна
+                      color: d > 7 ? '#DC2626' : '#D97706' }}>
+                      ⏰ {d > 0 ? `${d} ${daysWord(d)} до дедлайна` : d === 0 ? 'Дедлайн сегодня!' : 'Дедлайн прошёл'}
                     </Text>
                   </View>
                 </View>
-              )}
+              ) : null; })()}
             </>
           ) : (
             <Text style={{ color: '#9CA3AF', fontSize: 14, fontStyle: 'italic' }}>
