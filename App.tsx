@@ -766,9 +766,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           <Text style={st.statLabel}>лучший стрик</Text>
         </View>
         {todayMood && (
-          <View style={[st.statBox, { backgroundColor: '#D1FAE5' }]}>
-            <Text style={[st.statNum, { color: '#059669' }]}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
-            <Text style={st.statLabel}>настроение</Text>
+          <View style={[st.statBox, { backgroundColor: 'transparent' }]}>
+            <Text style={[st.statNum, { color: '#fff' }]}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
+            <Text style={[st.statLabel, { color: 'rgba(255,255,255,0.8)' }]}>настроение</Text>
           </View>
         )}
       </View>
