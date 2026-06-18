@@ -8,7 +8,7 @@ import { StatusBar } from 'expo-status-bar';
 import { storage, Goals, Task, Habit, HabitLog, MoodEntry, Commitment, todayString, ProviderId, ProviderSettings } from './services/storage';
 import { sendMessage, sendSystemMessage, PROVIDERS } from './services/ai';
 import { DAILY_CHECKIN_PROMPT, WEEKLY_REVIEW_PROMPT, EVENING_RITUAL_PROMPT } from './constants/prompts';
-import { CITIES, City, getCityTime } from './constants/cities';
+import { CITIES, City, getCityTime, fetchWeather } from './constants/cities';
 
 type Screen = 'home' | 'todos' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
@@ -552,6 +552,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   const [weeklyPending,  setWeeklyPending]  = useState(false);
   const [weekDone,       setWeekDone]       = useState(0);
   const [topStreak,      setTopStreak]      = useState(0);
+  const [weather,        setWeather]        = useState<{ current: number; max: number } | null>(null);
   const scrollRef    = useRef<ScrollView>(null);
   const voiceBaseRef = useRef('');
   const tts          = useTTS();
@@ -582,6 +583,10 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
 
     const mood = await storage.getTodayMood();
     setTodayMood(mood);
+
+    // Погода
+    const city = await storage.getCity();
+    if (city) fetchWeather(city).then(w => w && setWeather(w));
 
     if (!key) return;
 
@@ -686,6 +691,26 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         <View style={{ flex: 1 }}>
           <Text style={st.homeGreet}>{greet}</Text>
           <Text style={st.homeDate}>{dateStr}</Text>
+          {weather && (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginTop: 5, gap: 6 }}>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 10,
+                paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontSize: 15 }}>🌡</Text>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+                  {weather.current > 0 ? '+' : ''}{weather.current}°
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>сейчас</Text>
+              </View>
+              <View style={{ backgroundColor: 'rgba(255,255,255,0.18)', borderRadius: 10,
+                paddingHorizontal: 10, paddingVertical: 4, flexDirection: 'row', alignItems: 'center', gap: 5 }}>
+                <Text style={{ fontSize: 15 }}>☀️</Text>
+                <Text style={{ color: '#fff', fontSize: 14, fontWeight: '700' }}>
+                  {weather.max > 0 ? '+' : ''}{weather.max}°
+                </Text>
+                <Text style={{ color: 'rgba(255,255,255,0.6)', fontSize: 12 }}>макс</Text>
+              </View>
+            </View>
+          )}
         </View>
         <PomodoroButton pomo={pomo} />
       </View>
