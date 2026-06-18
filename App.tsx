@@ -1165,7 +1165,7 @@ function TodosScreen() {
 
   const prevDate = shiftDate(selDate, -1);
   const nextDate = shiftDate(selDate, 1);
-  const canGoNext = selDate < today;
+  const maxFuture = shiftDate(today, 60); // навигатор "По дням" — до 60 дней вперёд
 
   const activeCount = tasks.filter(t => !t.done).length;
   const doneCount   = tasks.filter(t => t.done).length;
@@ -1318,11 +1318,11 @@ function TodosScreen() {
                 </TouchableOpacity>
               )}
             </View>
-            <TouchableOpacity onPress={() => canGoNext && setSelDate(nextDate)}
+            <TouchableOpacity onPress={() => selDate < maxFuture && setSelDate(nextDate)}
               style={{ width: 36, height: 36, borderRadius: 18,
-                backgroundColor: canGoNext ? '#EEF2FF' : '#F3F4F6',
+                backgroundColor: selDate < maxFuture ? '#EEF2FF' : '#F3F4F6',
                 alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 18, color: canGoNext ? '#4F46E5' : '#D1D5DB' }}>›</Text>
+              <Text style={{ fontSize: 18, color: selDate < maxFuture ? '#4F46E5' : '#D1D5DB' }}>›</Text>
             </TouchableOpacity>
           </View>
           {/* Мини-полоска дней с задачами */}
@@ -1381,32 +1381,32 @@ function TodosScreen() {
               />
               {/* Дата задачи */}
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Дата задачи</Text>
-              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
-                <TouchableOpacity onPress={() => setFormDate(shiftDate(formDate, -1))}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6',
-                    alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 20, color: '#4F46E5', lineHeight: 24 }}>‹</Text>
-                </TouchableOpacity>
-                <View style={{ flex: 1, paddingVertical: 9, backgroundColor: '#F3F4F6', borderRadius: 10, alignItems: 'center' }}>
-                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>
-                    {formDate === today ? 'Сегодня' :
-                     formDate === shiftDate(today, 1) ? 'Завтра' :
-                     formDate === shiftDate(today, -1) ? 'Вчера' :
-                     new Date(formDate + 'T00:00:00').toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short', year: formDate.slice(0,4) !== today.slice(0,4) ? 'numeric' : undefined })}
-                  </Text>
-                </View>
-                <TouchableOpacity onPress={() => setFormDate(shiftDate(formDate, 1))}
-                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6',
-                    alignItems: 'center', justifyContent: 'center' }}>
-                  <Text style={{ fontSize: 20, color: '#4F46E5', lineHeight: 24 }}>›</Text>
-                </TouchableOpacity>
-              </View>
-              {formDate !== today && (
-                <TouchableOpacity onPress={() => setFormDate(today)} style={{ alignSelf: 'center', marginBottom: 14 }}>
-                  <Text style={{ fontSize: 12, color: '#4F46E5' }}>← Вернуться к сегодня</Text>
-                </TouchableOpacity>
-              )}
-              {formDate === today && <View style={{ height: 14 }} />}
+              <ScrollView horizontal showsHorizontalScrollIndicator={false}
+                contentContainerStyle={{ gap: 7, paddingBottom: 4 }}
+                style={{ marginBottom: 14 }}>
+                {Array.from({ length: 15 }, (_, i) => {
+                  const ds = shiftDate(today, i);
+                  const d  = new Date(ds + 'T00:00:00');
+                  const sel = ds === formDate;
+                  const dayLabel = i === 0 ? 'Сег' : i === 1 ? 'Завт' :
+                    d.toLocaleDateString('ru-RU', { weekday: 'short' });
+                  return (
+                    <TouchableOpacity key={ds} onPress={() => setFormDate(ds)}
+                      style={{ alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7,
+                        borderRadius: 10, minWidth: 52,
+                        backgroundColor: sel ? '#4F46E5' : '#F3F4F6',
+                        borderWidth: 1.5, borderColor: sel ? '#4F46E5' : '#E5E7EB' }}>
+                      <Text style={{ fontSize: 10, fontWeight: '600',
+                        color: sel ? 'rgba(255,255,255,0.8)' : '#9CA3AF' }}>{dayLabel}</Text>
+                      <Text style={{ fontSize: 16, fontWeight: '800',
+                        color: sel ? '#fff' : '#111827' }}>{d.getDate()}</Text>
+                      <Text style={{ fontSize: 9, color: sel ? 'rgba(255,255,255,0.7)' : '#C4C9D4', marginTop: 1 }}>
+                        {d.toLocaleDateString('ru-RU', { month: 'short' })}
+                      </Text>
+                    </TouchableOpacity>
+                  );
+                })}
+              </ScrollView>
               {/* Выбор цвета */}
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Цвет метки</Text>
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
