@@ -1231,24 +1231,10 @@ function TodosScreen() {
           </View>
         ) : (
           <>
-            {/* Секция коуча */}
-            {coachTasks.length > 0 && (
-              <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
-                    🤖 ОТ КОУЧА
-                  </Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                </View>
-                {coachTasks.map(t => <TaskCard key={t.id} task={t} />)}
-              </>
-            )}
-
             {/* Секция пользователя */}
             {userTasks.length > 0 && (
               <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: coachTasks.length > 0 ? 8 : 4 }}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
                   <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
                   <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
                     📝 МОИ ЗАДАЧИ
@@ -1256,6 +1242,20 @@ function TodosScreen() {
                   <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
                 </View>
                 {userTasks.map(t => <TaskCard key={t.id} task={t} />)}
+              </>
+            )}
+
+            {/* Секция коуча */}
+            {coachTasks.length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: userTasks.length > 0 ? 8 : 4 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
+                    🤖 ОТ КОУЧА
+                  </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                </View>
+                {coachTasks.map(t => <TaskCard key={t.id} task={t} />)}
               </>
             )}
           </>
