@@ -71,6 +71,7 @@ const KEYS = {
   HABIT_LOGS: '@habit_logs',
   MOOD: '@mood_entries',
   COMMITMENT: '@commitment',
+  THEME: '@theme',
 };
 
 const DEFAULT_PROVIDER: ProviderSettings = {
@@ -252,6 +253,14 @@ export const storage = {
 
   async clearCommitment(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.COMMITMENT);
+  },
+
+  async getTheme(): Promise<string> {
+    return (await AsyncStorage.getItem(KEYS.THEME)) || '#4F46E5';
+  },
+
+  async saveTheme(color: string): Promise<void> {
+    await AsyncStorage.setItem(KEYS.THEME, color);
   },
 
   async clearAll(): Promise<void> {

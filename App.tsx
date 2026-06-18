@@ -12,6 +12,20 @@ import { CITIES, City, getCityTime, fetchWeather } from './constants/cities';
 
 type Screen = 'home' | 'todos' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
+// ─── Theme ────────────────────────────────────────────────────────────────────
+export const APP_THEMES = [
+  { id: 'violet', name: 'Фиолетовый', primary: '#4F46E5', light: '#EEF2FF' },
+  { id: 'blue',   name: 'Синий',      primary: '#2563EB', light: '#DBEAFE' },
+  { id: 'teal',   name: 'Бирюзовый',  primary: '#0D9488', light: '#CCFBF1' },
+  { id: 'green',  name: 'Зелёный',    primary: '#16A34A', light: '#DCFCE7' },
+  { id: 'rose',   name: 'Розовый',    primary: '#DB2777', light: '#FCE7F3' },
+  { id: 'amber',  name: 'Янтарный',   primary: '#D97706', light: '#FEF3C7' },
+  { id: 'slate',  name: 'Тёмный',     primary: '#374151', light: '#F3F4F6' },
+];
+interface ThemeCtx { primary: string; light: string; }
+const ThemeContext = React.createContext<ThemeCtx>({ primary: '#4F46E5', light: '#EEF2FF' });
+function useTheme(): ThemeCtx { return React.useContext(ThemeContext); }
+
 function localDateString(d: Date): string {
   const y = d.getFullYear();
   const m = String(d.getMonth() + 1).padStart(2, '0');
@@ -165,6 +179,7 @@ const GOAL_STEPS = [
 // ─── Onboarding ───────────────────────────────────────────────────────────────
 function OnboardingScreen({ onDone }: { onDone: () => void }) {
   // step 0 = выбор провайдера, 1..5 = цели
+  const { primary, light } = useTheme();
   const [step, setStep] = useState(0);
   const [selectedProvider, setSelectedProvider] = useState<string | null>(null);
   const [apiKey, setApiKey] = useState('');
@@ -212,7 +227,7 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
           {/* Progress dots */}
           <View style={st.dots}>
             {Array.from({ length: totalSteps }).map((_, i) => (
-              <View key={i} style={[st.dot, i <= step && st.dotActive]} />
+              <View key={i} style={[st.dot, i <= step && { ...st.dotActive, backgroundColor: primary }]} />
             ))}
           </View>
 
@@ -228,7 +243,7 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
                 return (
                   <TouchableOpacity
                     key={p.id}
-                    style={[st.provCard, isSelected && st.provCardActive]}
+                    style={[st.provCard, isSelected && { borderColor: primary, backgroundColor: light }]}
                     onPress={() => { setSelectedProvider(p.id); setApiKey(''); }}
                     activeOpacity={0.8}
                   >
@@ -291,7 +306,7 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
             </>
           )}
 
-          <TouchableOpacity style={st.primaryBtn} onPress={next}>
+          <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={next}>
             <Text style={st.primaryBtnText}>{isLast ? 'Начать! 🚀' : 'Далее →'}</Text>
           </TouchableOpacity>
           {step > 0 && (
@@ -551,6 +566,7 @@ const ENERGY_ICONS  = ['🪫', '🔋', '⚡', '⚡⚡', '🚀'];
 type CheckinType = 'daily' | 'weekly' | 'evening';
 
 function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onStats: () => void; pomo: PomoState }) {
+  const { primary, light } = useTheme();
   const [tasks,          setTasks]          = useState<Task[]>([]);
   const [hasKey,         setHasKey]         = useState(false);
   const [showCheckin,    setShowCheckin]    = useState(false);
@@ -699,7 +715,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
     <View style={{ flex: 1, backgroundColor: '#F0F2FF' }}>
 
       {/* ── Gradient-style header ── */}
-      <View style={st.homeHeader}>
+      <View style={[st.homeHeader, { backgroundColor: primary }]}>
         <View style={{ flex: 1 }}>
           <Text style={st.homeGreet}>{greet}</Text>
           <Text style={st.homeDate}>{dateStr}</Text>
@@ -728,9 +744,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
       </View>
 
       {/* ── Stats row ── */}
-      <View style={st.statsRow}>
-        <View style={[st.statBox, { backgroundColor: '#EEF2FF' }]}>
-          <Text style={[st.statNum, { color: '#4F46E5' }]}>{done}/{tasks.length}</Text>
+      <View style={[st.statsRow, { backgroundColor: primary }]}>
+        <View style={[st.statBox, { backgroundColor: light }]}>
+          <Text style={[st.statNum, { color: primary }]}>{done}/{tasks.length}</Text>
           <Text style={st.statLabel}>задач сегодня</Text>
         </View>
         <View style={[st.statBox, { backgroundColor: '#FEF3C7' }]}>
@@ -781,14 +797,14 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
 
         {/* Pending checkin banner */}
         {checkinPending && hasKey && (
-          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#4F46E5', flexDirection: 'row', alignItems: 'center' }]}
+          <TouchableOpacity style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary, flexDirection: 'row', alignItems: 'center' }]}
             onPress={() => openCheckin('daily')}>
             <Text style={{ fontSize: 24, marginRight: 12 }}>☀️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: '#4F46E5', fontSize: 14 }}>Начать утренний чек-ин</Text>
+              <Text style={{ fontWeight: '700', color: primary, fontSize: 14 }}>Начать утренний чек-ин</Text>
               <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Макс ждёт — нажми чтобы начать</Text>
             </View>
-            <Text style={{ fontSize: 18, color: '#4F46E5' }}>→</Text>
+            <Text style={{ fontSize: 18, color: primary }}>→</Text>
           </TouchableOpacity>
         )}
 
@@ -860,7 +876,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
                   ))}
                 </View>
                 <TouchableOpacity
-                  style={[st.primaryBtn, (!draftMood.mood || !draftMood.energy) && { backgroundColor: '#C7D2FE' }]}
+                  style={[st.primaryBtn, { backgroundColor: primary }, (!draftMood.mood || !draftMood.energy) && { opacity: 0.5 }]}
                   onPress={saveMood} disabled={!draftMood.mood || !draftMood.energy}>
                   <Text style={st.primaryBtnText}>Сохранить</Text>
                 </TouchableOpacity>
@@ -870,13 +886,13 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         })()}
 
         {/* Tasks */}
-        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#4F46E5' }]}>
+        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <Text style={st.cardTitle}>✅ Задачи на сегодня</Text>
             <Text style={{ fontSize: 13, color: '#6B7280' }}>{done} / {tasks.length}</Text>
           </View>
           <View style={st.progBar}>
-            <View style={[st.progFill, { width: tasks.length ? `${(done / tasks.length) * 100}%` as any : '0%' }]} />
+            <View style={[st.progFill, { width: tasks.length ? `${(done / tasks.length) * 100}%` as any : '0%', backgroundColor: primary }]} />
           </View>
         </View>
 
@@ -887,7 +903,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
             <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 18, fontSize: 14 }}>
               Пройди утренний чек-ин — коуч составит план
             </Text>
-            <TouchableOpacity style={st.primaryBtn} onPress={() => openCheckin('daily')}>
+            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={() => openCheckin('daily')}>
               <Text style={st.primaryBtnText}>☀️ Начать чек-ин</Text>
             </TouchableOpacity>
           </View>
@@ -901,7 +917,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               const doneTasks   = tasks.filter(t => t.done);
               const row = (task: Task) => (
                 <TouchableOpacity key={task.id} style={st.taskRow} onPress={() => toggleTask(task.id)} activeOpacity={0.7}>
-                  <View style={[st.checkbox, task.done && st.checkboxDone]}>
+                  <View style={[st.checkbox, task.done && { ...st.checkboxDone, backgroundColor: primary }]}>
                     {task.done && <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>✓</Text>}
                   </View>
                   <Text style={[st.taskText, task.done && st.taskDone]}>{task.text}</Text>
@@ -962,7 +978,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
       {/* Checkin Modal */}
       <Modal visible={showCheckin} animationType="slide" transparent={false} onRequestClose={closeCheckin}>
         <SafeAreaView style={st.safe}>
-          <View style={[st.modalHeader, { backgroundColor: '#4F46E5' }]}>
+          <View style={[st.modalHeader, { backgroundColor: primary }]}>
             <TouchableOpacity onPress={closeCheckin} style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
               <Text style={{ color: '#fff', fontSize: 20 }}>←</Text>
               <Text style={{ color: 'rgba(255,255,255,0.8)', fontSize: 15 }}>Назад</Text>
@@ -976,7 +992,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           <ScrollView ref={scrollRef} style={{ flex: 1 }} contentContainerStyle={{ padding: 12, paddingBottom: 20 }}>
             {msgs.map((m, i) => (
               <View key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginVertical: 4 }}>
-                <View style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
+                <View style={[st.bubble, m.role === 'user' ? [st.bubbleUser, { backgroundColor: primary }] : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
                   {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
                   <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
                 </View>
@@ -991,7 +1007,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
             ))}
             {loading && (
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                <ActivityIndicator color="#4F46E5" size="small" />
+                <ActivityIndicator color={primary} size="small" />
                 <Text style={{ color: '#6B7280', marginLeft: 8 }}>Коуч думает...</Text>
               </View>
             )}
@@ -1006,7 +1022,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               <TextInput style={st.chatInput} value={input} onChangeText={setInput}
                 placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline />
               <TouchableOpacity
-                style={[st.sendBtn, (!input.trim() || loading) && { backgroundColor: '#C7D2FE' }]}
+                style={[st.sendBtn, { backgroundColor: primary }, (!input.trim() || loading) && { opacity: 0.5 }]}
                 onPress={sendCheckin} disabled={!input.trim() || loading}>
                 <Text style={{ color: '#fff', fontSize: 18 }}>➤</Text>
               </TouchableOpacity>
@@ -1034,6 +1050,7 @@ function parseTasksFromText(text: string): string[] {
 
 // ─── Chat ─────────────────────────────────────────────────────────────────────
 function ChatScreen() {
+  const { primary, light } = useTheme();
   const [msgs,         setMsgs]         = useState<{ role: 'user' | 'assistant'; content: string }[]>([]);
   const [input,        setInput]        = useState('');
   const [loading,      setLoading]      = useState(false);
@@ -1126,8 +1143,8 @@ function ChatScreen() {
               Расскажи о целях, спроси совет или попроси задачи на день
             </Text>
             {CHIPS.map(c => (
-              <TouchableOpacity key={c} style={st.chip} onPress={() => setInput(c)}>
-                <Text style={st.chipText}>{c}</Text>
+              <TouchableOpacity key={c} style={[st.chip, { backgroundColor: light }]} onPress={() => setInput(c)}>
+                <Text style={[st.chipText, { color: primary }]}>{c}</Text>
               </TouchableOpacity>
             ))}
           </View>
@@ -1136,7 +1153,7 @@ function ChatScreen() {
             onContentSizeChange={() => scrollRef.current?.scrollToEnd({ animated: false })}>
             {msgs.map((m, i) => (
               <View key={i} style={{ alignSelf: m.role === 'user' ? 'flex-end' : 'flex-start', maxWidth: '85%', marginVertical: 4 }}>
-                <View style={[st.bubble, m.role === 'user' ? st.bubbleUser : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
+                <View style={[st.bubble, m.role === 'user' ? [st.bubbleUser, { backgroundColor: primary }] : st.bubbleAI, { marginVertical: 0, alignSelf: 'stretch' }]}>
                   {m.role === 'assistant' && <Text style={{ fontSize: 20, marginRight: 8 }}>🤖</Text>}
                   <Text style={[st.bubbleText, m.role === 'user' && { color: '#fff' }]}>{m.content}</Text>
                 </View>
@@ -1151,7 +1168,7 @@ function ChatScreen() {
             ))}
             {loading && (
               <View style={{ flexDirection: 'row', alignItems: 'center', padding: 10 }}>
-                <ActivityIndicator color="#4F46E5" size="small" />
+                <ActivityIndicator color={primary} size="small" />
                 <Text style={{ color: '#6B7280', marginLeft: 8 }}>Коуч думает...</Text>
               </View>
             )}
@@ -1166,7 +1183,7 @@ function ChatScreen() {
           <TextInput style={st.chatInput} value={input} onChangeText={setInput}
             placeholder="Напиши или скажи..." placeholderTextColor="#9CA3AF" multiline maxLength={1000} />
           <TouchableOpacity
-            style={[st.sendBtn, (!input.trim() || loading) && { backgroundColor: '#C7D2FE' }]}
+            style={[st.sendBtn, { backgroundColor: primary }, (!input.trim() || loading) && { opacity: 0.5 }]}
             onPress={send} disabled={!input.trim() || loading}>
             <Text style={{ color: '#fff', fontSize: 18 }}>➤</Text>
           </TouchableOpacity>
@@ -1185,6 +1202,7 @@ const TASK_COLORS = [
 ];
 
 function TodosScreen() {
+  const { primary, light } = useTheme();
   const [tasks,       setTasks]       = useState<Task[]>([]);
   const [editTask,    setEditTask]    = useState<Task | null>(null);
   const [isNew,       setIsNew]       = useState(false);
@@ -1314,7 +1332,7 @@ function TodosScreen() {
               style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
                 alignItems: 'center', justifyContent: 'center' },
                 task.done
-                  ? { backgroundColor: accent ?? '#4F46E5', borderColor: accent ?? '#4F46E5' }
+                  ? { backgroundColor: accent ?? primary, borderColor: accent ?? primary }
                   : { borderColor: accent ?? '#D1D5DB' }]}>
               {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
             </TouchableOpacity>
@@ -1329,7 +1347,7 @@ function TodosScreen() {
             </View>
             <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
               <TouchableOpacity onPress={() => openEdit(task)}
-                style={{ padding: 6, backgroundColor: accent ? accent + '22' : '#EEF2FF', borderRadius: 8 }}>
+                style={{ padding: 6, backgroundColor: accent ? accent + '22' : light, borderRadius: 8 }}>
                 <Text style={{ fontSize: 15 }}>✏️</Text>
               </TouchableOpacity>
               <TouchableOpacity onPress={() => deleteTask(task.id)}
@@ -1350,7 +1368,7 @@ function TodosScreen() {
           <Text style={{ fontSize: 44, marginBottom: 12 }}>📭</Text>
           <Text style={[st.cardTitle, { textAlign: 'center' }]}>Нет задач</Text>
           {filter === 'active' && (
-            <TouchableOpacity style={[st.primaryBtn, { marginTop: 16 }]} onPress={openAdd}>
+            <TouchableOpacity style={[st.primaryBtn, { marginTop: 16, backgroundColor: primary }]} onPress={openAdd}>
               <Text style={st.primaryBtnText}>+ Добавить дело</Text>
             </TouchableOpacity>
           )}
@@ -1377,7 +1395,7 @@ function TodosScreen() {
       <View style={st.topBar}>
         <Text style={st.screenTitle}>📝 Мои дела</Text>
         <TouchableOpacity onPress={openAdd}>
-          <Text style={{ fontSize: 30, color: '#4F46E5', lineHeight: 34 }}>+</Text>
+          <Text style={{ fontSize: 30, color: primary, lineHeight: 34 }}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -1386,9 +1404,9 @@ function TodosScreen() {
         {FILTERS.map(([key, label]) => (
           <TouchableOpacity key={key} onPress={() => { setFilter(key); if (key === 'bydate') setSelDate(today); }}
             style={{ flex: 1, paddingVertical: 11, alignItems: 'center',
-              borderBottomWidth: 2.5, borderBottomColor: filter === key ? '#4F46E5' : 'transparent' }}>
+              borderBottomWidth: 2.5, borderBottomColor: filter === key ? primary : 'transparent' }}>
             <Text style={{ fontSize: 12, fontWeight: filter === key ? '700' : '500',
-              color: filter === key ? '#4F46E5' : '#6B7280' }}>{label}</Text>
+              color: filter === key ? primary : '#6B7280' }}>{label}</Text>
           </TouchableOpacity>
         ))}
       </View>
@@ -1399,22 +1417,22 @@ function TodosScreen() {
           {/* Стрелки навигации */}
           <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
             <TouchableOpacity onPress={() => setSelDate(prevDate)}
-              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 18, color: '#4F46E5' }}>‹</Text>
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: light, alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: primary }}>‹</Text>
             </TouchableOpacity>
             <View style={{ alignItems: 'center' }}>
               <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{formatDateNav(selDate)}</Text>
               {selDate !== today && (
                 <TouchableOpacity onPress={() => setSelDate(today)}>
-                  <Text style={{ fontSize: 11, color: '#4F46E5', marginTop: 2 }}>← Вернуться к сегодня</Text>
+                  <Text style={{ fontSize: 11, color: primary, marginTop: 2 }}>← Вернуться к сегодня</Text>
                 </TouchableOpacity>
               )}
             </View>
             <TouchableOpacity onPress={() => selDate < maxFuture && setSelDate(nextDate)}
               style={{ width: 36, height: 36, borderRadius: 18,
-                backgroundColor: selDate < maxFuture ? '#EEF2FF' : '#F3F4F6',
+                backgroundColor: selDate < maxFuture ? light : '#F3F4F6',
                 alignItems: 'center', justifyContent: 'center' }}>
-              <Text style={{ fontSize: 18, color: selDate < maxFuture ? '#4F46E5' : '#D1D5DB' }}>›</Text>
+              <Text style={{ fontSize: 18, color: selDate < maxFuture ? primary : '#D1D5DB' }}>›</Text>
             </TouchableOpacity>
           </View>
           {/* Мини-полоска дней с задачами */}
@@ -1428,8 +1446,8 @@ function TodosScreen() {
               return (
                 <TouchableOpacity key={ds} onPress={() => setSelDate(ds)}
                   style={{ alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
-                    backgroundColor: isActive ? '#4F46E5' : '#F3F4F6',
-                    borderWidth: 1.5, borderColor: isActive ? '#4F46E5' : '#E5E7EB' }}>
+                    backgroundColor: isActive ? primary : '#F3F4F6',
+                    borderWidth: 1.5, borderColor: isActive ? primary : '#E5E7EB' }}>
                   <Text style={{ fontSize: 10, fontWeight: '600',
                     color: isActive ? 'rgba(255,255,255,0.8)' : '#9CA3AF' }}>
                     {d.toLocaleDateString('ru-RU', { weekday: 'short' })}
@@ -1486,8 +1504,8 @@ function TodosScreen() {
                     <TouchableOpacity key={ds} onPress={() => setFormDate(ds)}
                       style={{ alignItems: 'center', paddingHorizontal: 10, paddingVertical: 7,
                         borderRadius: 10, minWidth: 52,
-                        backgroundColor: sel ? '#4F46E5' : '#F3F4F6',
-                        borderWidth: 1.5, borderColor: sel ? '#4F46E5' : '#E5E7EB' }}>
+                        backgroundColor: sel ? primary : '#F3F4F6',
+                        borderWidth: 1.5, borderColor: sel ? primary : '#E5E7EB' }}>
                       <Text style={{ fontSize: 10, fontWeight: '600',
                         color: sel ? 'rgba(255,255,255,0.8)' : '#9CA3AF' }}>{dayLabel}</Text>
                       <Text style={{ fontSize: 16, fontWeight: '800',
@@ -1505,9 +1523,9 @@ function TodosScreen() {
                 {/* Без цвета */}
                 <TouchableOpacity onPress={() => setFormColor(undefined)}
                   style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 2.5,
-                    borderColor: formColor === undefined ? '#4F46E5' : '#D1D5DB',
+                    borderColor: formColor === undefined ? primary : '#D1D5DB',
                     backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}>
-                  {formColor === undefined && <Text style={{ fontSize: 14, color: '#4F46E5' }}>✕</Text>}
+                  {formColor === undefined && <Text style={{ fontSize: 14, color: primary }}>✕</Text>}
                 </TouchableOpacity>
                 {TASK_COLORS.map(c => (
                   <TouchableOpacity key={c} onPress={() => setFormColor(c)}
@@ -1518,7 +1536,7 @@ function TodosScreen() {
                   </TouchableOpacity>
                 ))}
               </View>
-              <TouchableOpacity style={[st.primaryBtn, formColor ? { backgroundColor: formColor } : {}]} onPress={saveTask}>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: formColor || primary }]} onPress={saveTask}>
                 <Text style={st.primaryBtnText}>{isNew ? 'Добавить' : 'Сохранить'}</Text>
               </TouchableOpacity>
               <View style={{ height: 8 }} />
@@ -1562,6 +1580,7 @@ function pluralDays(n: number) {
 }
 
 function HabitsScreen() {
+  const { primary, light } = useTheme();
   const [habits,     setHabits]     = useState<Habit[]>([]);
   const [logs,       setLogs]       = useState<HabitLog[]>([]);
   const [editHabit,  setEditHabit]  = useState<Habit | null>(null);
@@ -1640,7 +1659,7 @@ function HabitsScreen() {
       <View style={st.topBar}>
         <Text style={st.screenTitle}>🔗 Привычки</Text>
         <TouchableOpacity onPress={openAdd}>
-          <Text style={{ fontSize: 30, color: '#4F46E5', lineHeight: 34 }}>+</Text>
+          <Text style={{ fontSize: 30, color: primary, lineHeight: 34 }}>+</Text>
         </TouchableOpacity>
       </View>
 
@@ -1657,7 +1676,7 @@ function HabitsScreen() {
                   : `Сегодня: ${todayDone} из ${todayHabits.length}`}
               </Text>
               <View style={st.progBar}>
-                <View style={[st.progFill, { width: `${todayHabits.length ? (todayDone / todayHabits.length) * 100 : 0}%` as any }]} />
+                <View style={[st.progFill, { width: `${todayHabits.length ? (todayDone / todayHabits.length) * 100 : 0}%` as any, backgroundColor: primary }]} />
               </View>
             </View>
           </View>
@@ -1670,7 +1689,7 @@ function HabitsScreen() {
             <Text style={{ color: '#6B7280', textAlign: 'center', marginTop: 4, marginBottom: 20 }}>
               Добавь первую привычку — нажми + вверху
             </Text>
-            <TouchableOpacity style={st.primaryBtn} onPress={openAdd}>
+            <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={openAdd}>
               <Text style={st.primaryBtnText}>+ Добавить привычку</Text>
             </TouchableOpacity>
           </View>
@@ -1695,7 +1714,7 @@ function HabitsScreen() {
                       <View style={{ flexDirection: 'row', gap: 3, marginTop: 5 }}>
                         {DAY_LABELS.map((d, i) => (
                           <View key={i} style={{ paddingHorizontal: 5, paddingVertical: 2, borderRadius: 5,
-                            backgroundColor: habit.days!.includes(i) ? '#4F46E5' : '#F3F4F6' }}>
+                            backgroundColor: habit.days!.includes(i) ? primary : '#F3F4F6' }}>
                             <Text style={{ fontSize: 10, fontWeight: '700',
                               color: habit.days!.includes(i) ? '#fff' : '#D1D5DB' }}>{d}</Text>
                           </View>
@@ -1712,14 +1731,14 @@ function HabitsScreen() {
                 </View>
                 <View style={{ flexDirection: 'row', gap: 3, marginBottom: 6 }}>
                   {last14.map((done, i) => (
-                    <View key={i} style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: done ? '#4F46E5' : '#E5E7EB' }} />
+                    <View key={i} style={{ flex: 1, height: 8, borderRadius: 4, backgroundColor: done ? primary : '#E5E7EB' }} />
                   ))}
                 </View>
                 <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center' }}>
                   <Text style={{ fontSize: 11, color: '#9CA3AF' }}>последние 14 дней</Text>
                   <View style={{ flexDirection: 'row', gap: 14 }}>
                     <TouchableOpacity onPress={() => openEdit(habit)}>
-                      <Text style={{ fontSize: 12, color: '#4F46E5', fontWeight: '600' }}>✏️ изменить</Text>
+                      <Text style={{ fontSize: 12, color: primary, fontWeight: '600' }}>✏️ изменить</Text>
                     </TouchableOpacity>
                     <TouchableOpacity onPress={() => deleteHabit(habit.id)}>
                       <Text style={{ fontSize: 12, color: '#EF4444' }}>удалить</Text>
@@ -1749,8 +1768,8 @@ function HabitsScreen() {
                 {HABIT_EMOJIS.map(e => (
                   <TouchableOpacity key={e} onPress={() => setFormEmoji(e)}
                     style={{ width: 44, height: 44, borderRadius: 22, alignItems: 'center', justifyContent: 'center',
-                      marginRight: 8, backgroundColor: formEmoji === e ? '#EEF2FF' : '#F3F4F6',
-                      borderWidth: formEmoji === e ? 2 : 0, borderColor: '#4F46E5' }}>
+                      marginRight: 8, backgroundColor: formEmoji === e ? light : '#F3F4F6',
+                      borderWidth: formEmoji === e ? 2 : 0, borderColor: primary }}>
                     <Text style={{ fontSize: 22 }}>{e}</Text>
                   </TouchableOpacity>
                 ))}
@@ -1768,15 +1787,15 @@ function HabitsScreen() {
                 {DAY_LABELS.map((d, i) => (
                   <TouchableOpacity key={i} onPress={() => toggleDay(i)}
                     style={{ flex: 1, paddingVertical: 9, borderRadius: 10, alignItems: 'center',
-                      backgroundColor: formDays.includes(i) ? '#4F46E5' : '#F3F4F6',
-                      borderWidth: 1.5, borderColor: formDays.includes(i) ? '#4F46E5' : '#E5E7EB' }}>
+                      backgroundColor: formDays.includes(i) ? primary : '#F3F4F6',
+                      borderWidth: 1.5, borderColor: formDays.includes(i) ? primary : '#E5E7EB' }}>
                     <Text style={{ fontSize: 12, fontWeight: '700',
                       color: formDays.includes(i) ? '#fff' : '#9CA3AF' }}>{d}</Text>
                   </TouchableOpacity>
                 ))}
               </View>
 
-              <TouchableOpacity style={st.primaryBtn} onPress={saveHabit}>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={saveHabit}>
                 <Text style={st.primaryBtnText}>{isNew ? 'Добавить привычку' : 'Сохранить'}</Text>
               </TouchableOpacity>
               <View style={{ height: 8 }} />
@@ -1798,6 +1817,7 @@ const GOAL_COLORS: Record<string, { border: string; bg: string; text: string }> 
 
 // ─── Goals ────────────────────────────────────────────────────────────────────
 function GoalsScreen({ onSettings }: { onSettings: () => void }) {
+  const { primary } = useTheme();
   const [goals,       setGoals]       = useState<Goals>({ day: [], week: [], month: [], year: [], fiveYear: [], antiGoals: [] });
   const [editingKey,  setEditingKey]  = useState<string | null>(null);
   const [draft,       setDraft]       = useState('');
@@ -1874,7 +1894,7 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
               <Text style={st.fieldLabel}>Дедлайн (ДД.ММ.ГГГГ или ГГГГ-ММ-ДД)</Text>
               <TextInput style={st.obInput} value={commDate} onChangeText={setCommDate}
                 placeholder="31.12.2025" placeholderTextColor="#9CA3AF" />
-              <TouchableOpacity style={st.primaryBtn} onPress={saveCommitment}>
+              <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={saveCommitment}>
                 <Text style={st.primaryBtnText}>Зафиксировать</Text>
               </TouchableOpacity>
             </>
@@ -2006,7 +2026,8 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
 }
 
 // ─── Settings ─────────────────────────────────────────────────────────────────
-function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () => void }) {
+function SettingsScreen({ onBack, onReset, onThemeChange }: { onBack: () => void; onReset: () => void; onThemeChange: (primary: string, light: string) => void }) {
+  const { primary, light } = useTheme();
   const [ps, setPs] = useState<ProviderSettings>({ activeProvider: 'groq', keys: {}, models: {} });
   const [savedId, setSavedId] = useState<ProviderId | null>(null);
   const [expandedId, setExpandedId] = useState<ProviderId | null>(null);
@@ -2061,7 +2082,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={st.topBar}>
         <TouchableOpacity onPress={onBack}>
-          <Text style={{ color: '#4F46E5', fontSize: 16, fontWeight: '500' }}>← Назад</Text>
+          <Text style={{ color: primary, fontSize: 16, fontWeight: '500' }}>← Назад</Text>
         </TouchableOpacity>
         <Text style={st.screenTitle}>Настройки</Text>
         <View style={{ width: 70 }} />
@@ -2069,8 +2090,8 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
       <ScrollView contentContainerStyle={[st.content, { gap: 12 }]}>
 
         {/* Active provider banner */}
-        <View style={[st.card, { backgroundColor: '#EEF2FF', borderWidth: 1.5, borderColor: '#4F46E5' }]}>
-          <Text style={{ fontSize: 13, color: '#4F46E5', fontWeight: '600', marginBottom: 4 }}>АКТИВНЫЙ ИИ</Text>
+        <View style={[st.card, { backgroundColor: light, borderWidth: 1.5, borderColor: primary }]}>
+          <Text style={{ fontSize: 13, color: primary, fontWeight: '600', marginBottom: 4 }}>АКТИВНЫЙ ИИ</Text>
           <Text style={{ fontSize: 17, fontWeight: '700', color: '#111827' }}>{activeInfo.name}</Text>
           <Text style={{ fontSize: 13, color: '#6B7280', marginTop: 2 }}>
             Модель: {ps.models[ps.activeProvider] || activeInfo.defaultModel}
@@ -2086,7 +2107,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           const curModel = draftModels[provider.id] || provider.defaultModel;
 
           return (
-            <View key={provider.id} style={[st.card, isActive && { borderWidth: 1.5, borderColor: '#4F46E5' }]}>
+            <View key={provider.id} style={[st.card, isActive && { borderWidth: 1.5, borderColor: primary }]}>
               {/* Header row */}
               <TouchableOpacity
                 style={{ flexDirection: 'row', alignItems: 'center' }}
@@ -2128,11 +2149,11 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
                     {provider.models.map(m => (
                       <TouchableOpacity
                         key={m.id}
-                        style={[st.modelRow, curModel === m.id && st.modelRowActive]}
+                        style={[st.modelRow, curModel === m.id && { backgroundColor: light, borderColor: primary }]}
                         onPress={() => setDraftModels(p => ({ ...p, [provider.id]: m.id }))}
                       >
-                        <View style={[st.modelDot, curModel === m.id && st.modelDotActive]} />
-                        <Text style={{ fontSize: 14, color: curModel === m.id ? '#4F46E5' : '#374151', flex: 1 }}>
+                        <View style={[st.modelDot, curModel === m.id && { borderColor: primary, backgroundColor: primary }]} />
+                        <Text style={{ fontSize: 14, color: curModel === m.id ? primary : '#374151', flex: 1 }}>
                           {m.label}
                         </Text>
                       </TouchableOpacity>
@@ -2142,7 +2163,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
                   {/* Action buttons */}
                   <View style={{ flexDirection: 'row', gap: 8, marginTop: 14 }}>
                     <TouchableOpacity
-                      style={[st.primaryBtn, { flex: 1 }, savedId === provider.id && { backgroundColor: '#10B981' }]}
+                      style={[st.primaryBtn, { flex: 1, backgroundColor: primary }, savedId === provider.id && { backgroundColor: '#10B981' }]}
                       onPress={() => saveProvider(provider.id)}
                     >
                       <Text style={st.primaryBtnText}>
@@ -2151,7 +2172,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
                     </TouchableOpacity>
                     {!isActive && (
                       <TouchableOpacity
-                        style={[st.primaryBtn, { flex: 1, backgroundColor: hasKey ? '#4F46E5' : '#E5E7EB' }]}
+                        style={[st.primaryBtn, { flex: 1, backgroundColor: hasKey ? primary : '#E5E7EB' }]}
                         onPress={() => hasKey ? setActive(provider.id) : Alert.alert('Сначала введи и сохрани ключ')}
                       >
                         <Text style={[st.primaryBtnText, !hasKey && { color: '#9CA3AF' }]}>
@@ -2171,6 +2192,34 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           );
         })}
 
+        {/* Цветовая тема */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>🎨 Цветовая тема</Text>
+          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 14 }}>Выбери оформление приложения</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            {APP_THEMES.map(theme => {
+              const isActive = theme.primary === primary;
+              return (
+                <TouchableOpacity key={theme.id} onPress={() => onThemeChange(theme.primary, theme.light)}
+                  style={{ alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: theme.primary,
+                    borderWidth: isActive ? 3 : 2,
+                    borderColor: isActive ? '#111827' : 'transparent',
+                    shadowColor: theme.primary, shadowOpacity: isActive ? 0.5 : 0,
+                    shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: isActive ? 4 : 0,
+                    alignItems: 'center', justifyContent: 'center' }}>
+                    {isActive && <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900' }}>✓</Text>}
+                  </View>
+                  <Text style={{ fontSize: 11, color: isActive ? theme.primary : '#6B7280', fontWeight: isActive ? '700' : '400' }}>
+                    {theme.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
         {/* City / timezone */}
         <View style={st.card}>
           <Text style={st.cardTitle}>🌍 Часовой пояс</Text>
@@ -2189,7 +2238,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
           ) : (
             <Text style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 10 }}>Город не выбран</Text>
           )}
-          <TouchableOpacity style={st.primaryBtn} onPress={() => setShowCityPicker(true)}>
+          <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={() => setShowCityPicker(true)}>
             <Text style={st.primaryBtnText}>{city ? 'Изменить город' : 'Выбрать город'}</Text>
           </TouchableOpacity>
         </View>
@@ -2243,7 +2292,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
                     }}
                   >
                     <View style={{ flex: 1 }}>
-                      <Text style={{ fontSize: 16, fontWeight: isSelected ? '700' : '400', color: isSelected ? '#4F46E5' : '#111827' }}>{c.name}</Text>
+                      <Text style={{ fontSize: 16, fontWeight: isSelected ? '700' : '400', color: isSelected ? primary : '#111827' }}>{c.name}</Text>
                       <Text style={{ fontSize: 13, color: '#9CA3AF' }}>UTC{c.utcOffset >= 0 ? '+' : ''}{c.utcOffset} · {getCityTime(c).timeStr}</Text>
                     </View>
                     {isSelected && <Text style={{ fontSize: 20 }}>✓</Text>}
@@ -2261,6 +2310,7 @@ function SettingsScreen({ onBack, onReset }: { onBack: () => void; onReset: () =
 
 // ─── Statistics ───────────────────────────────────────────────────────────────
 function StatsScreen({ onBack }: { onBack: () => void }) {
+  const { primary } = useTheme();
   const [tasks,  setTasks]  = useState<Task[]>([]);
   const [moods,  setMoods]  = useState<MoodEntry[]>([]);
   const [habits, setHabits] = useState<Habit[]>([]);
@@ -2325,7 +2375,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
   return (
     <View style={{ flex: 1, backgroundColor: '#F0F2FF' }}>
       {/* Header */}
-      <View style={[st.homeHeader, { flexDirection: 'row', alignItems: 'center' }]}>
+      <View style={[st.homeHeader, { backgroundColor: primary, flexDirection: 'row', alignItems: 'center' }]}>
         <TouchableOpacity onPress={onBack} style={{ marginRight: 12,
           backgroundColor: 'rgba(255,255,255,0.2)', borderRadius: 20, paddingHorizontal: 12, paddingVertical: 6 }}>
           <Text style={{ color: '#fff', fontWeight: '700', fontSize: 15 }}>← Назад</Text>
@@ -2338,7 +2388,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
         {/* Summary cards */}
         <View style={{ flexDirection: 'row', gap: 8 }}>
           <View style={[st.statBox, { backgroundColor: '#EEF2FF', flex: 1 }]}>
-            <Text style={[st.statNum, { color: '#4F46E5' }]}>{totalDone}</Text>
+            <Text style={[st.statNum, { color: primary }]}>{totalDone}</Text>
             <Text style={st.statLabel}>всего задач{'\n'}выполнено</Text>
           </View>
           <View style={[st.statBox, { backgroundColor: '#D1FAE5', flex: 1 }]}>
@@ -2476,7 +2526,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
                           backgroundColor: done ? '#10B981' : '#E5E7EB',
                           borderRadius: 3,
                           borderWidth: isToday ? 1 : 0,
-                          borderColor: '#4F46E5',
+                          borderColor: primary,
                         }} />
                       );
                     })}
@@ -2532,24 +2582,41 @@ export default function App() {
   const [screen,         setScreen]         = useState<Screen | null>(null);
   const [tab,            setTab]            = useState<Screen>('home');
   const [activeProvider, setActiveProvider] = useState<string>('groq');
+  const [themeColor,     setThemeColor]     = useState('#4F46E5');
+  const [themeLight,     setThemeLight]     = useState('#EEF2FF');
   const pomo = usePomodoro();
 
   useEffect(() => {
     storage.isOnboarded().then(done => setScreen(done ? 'home' : 'onboarding'));
     storage.getProviderSettings().then(ps => setActiveProvider(ps.activeProvider));
+    storage.getTheme().then(color => {
+      setThemeColor(color);
+      const t = APP_THEMES.find(t => t.primary === color);
+      if (t) setThemeLight(t.light);
+    });
   }, []);
+
+  function applyTheme(primary: string, light: string) {
+    setThemeColor(primary);
+    setThemeLight(light);
+    storage.saveTheme(primary);
+  }
 
   if (screen === null) {
     return (
       <View style={[st.safe, { alignItems: 'center', justifyContent: 'center' }]}>
         <Text style={{ fontSize: 52, marginBottom: 20 }}>🎯</Text>
-        <ActivityIndicator color="#4F46E5" size="large" />
+        <ActivityIndicator color={themeColor} size="large" />
       </View>
     );
   }
 
   if (screen === 'onboarding') {
-    return <OnboardingScreen onDone={() => { setTab('home'); setScreen('home'); }} />;
+    return (
+      <ThemeContext.Provider value={{ primary: themeColor, light: themeLight }}>
+        <OnboardingScreen onDone={() => { setTab('home'); setScreen('home'); }} />
+      </ThemeContext.Provider>
+    );
   }
 
   function goTab(t: Screen) {
@@ -2561,45 +2628,42 @@ export default function App() {
   }
 
   return (
-    <SafeAreaView style={st.safe}>
-      <StatusBar style="dark" />
-      <PomodoroModal pomo={pomo} />
-      {screen === 'stats' ? (
-        <StatsScreen onBack={() => { setScreen(tab); }} />
-      ) : (
-        <>
-          <View style={{ flex: 1 }}>
-            {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} pomo={pomo} />}
-            {tab === 'todos'    && <TodosScreen />}
-            {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
-            {tab === 'habits'   && <HabitsScreen />}
-            {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
-          </View>
-          {/* Полоска таймера — видна на всех вкладках */}
-          {pomo.running && (
-            <TouchableOpacity onPress={() => pomo.setVisible(true)} activeOpacity={0.85}
-              style={{ backgroundColor: pomo.cur.color, flexDirection: 'row', alignItems: 'center',
-                justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 18 }}>
-              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
-                {pomo.cur.emoji} {pomo.cur.name}
-              </Text>
-              <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 1.5 }}>
-                {pomo.mins}:{pomo.secs}
-              </Text>
-              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>нажми чтобы открыть</Text>
-            </TouchableOpacity>
-          )}
-          <View style={st.tabBar}>
-            {TABS.map(t => (
-              <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
-                <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
-                <Text style={[st.tabLabel, tab === t.key && st.tabLabelActive]}>{t.label}</Text>
+    <ThemeContext.Provider value={{ primary: themeColor, light: themeLight }}>
+      <SafeAreaView style={st.safe}>
+        <StatusBar style="dark" />
+        <PomodoroModal pomo={pomo} />
+        {screen === 'stats' ? (
+          <StatsScreen onBack={() => { setScreen(tab); }} />
+        ) : (
+          <>
+            <View style={{ flex: 1 }}>
+              {tab === 'home'     && <HomeScreen onSettings={() => goTab('settings')} onStats={() => setScreen('stats')} pomo={pomo} />}
+              {tab === 'todos'    && <TodosScreen />}
+              {tab === 'goals'    && <GoalsScreen onSettings={() => goTab('settings')} />}
+              {tab === 'habits'   && <HabitsScreen />}
+              {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} onThemeChange={applyTheme} />}
+            </View>
+            {pomo.running && (
+              <TouchableOpacity onPress={() => pomo.setVisible(true)} activeOpacity={0.85}
+                style={{ backgroundColor: pomo.cur.color, flexDirection: 'row', alignItems: 'center',
+                  justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 18 }}>
+                <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>{pomo.cur.emoji} {pomo.cur.name}</Text>
+                <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 1.5 }}>{pomo.mins}:{pomo.secs}</Text>
+                <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>нажми чтобы открыть</Text>
               </TouchableOpacity>
-            ))}
-          </View>
-        </>
-      )}
-    </SafeAreaView>
+            )}
+            <View style={st.tabBar}>
+              {TABS.map(t => (
+                <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
+                  <Text style={{ fontSize: 22 }}>{t.emoji}</Text>
+                  <Text style={[st.tabLabel, tab === t.key && { color: themeColor, fontWeight: '700' }]}>{t.label}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </>
+        )}
+      </SafeAreaView>
+    </ThemeContext.Provider>
   );
 }
 
