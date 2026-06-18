@@ -27,6 +27,7 @@ export interface Task {
   text: string;
   done: boolean;
   date: string;
+  source?: 'user' | 'coach';
 }
 
 export interface Habit {

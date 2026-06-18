@@ -611,7 +611,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
       const newTasks: Task[] = lines.map((l, i) => ({
         id: `${Date.now()}_${i}`,
         text: l.replace(/^✅\s*(Задача\s*\d+:\s*)?/i, '').replace(/^\d+\.\s*/, '').trim(),
-        done: false, date: todayString(),
+        done: false, date: todayString(), source: 'coach' as const,
       }));
       await storage.saveTasks([...existing, ...newTasks]);
       setTasks(newTasks);
@@ -851,7 +851,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
                     const existingTexts = new Set(existing.filter(t => t.date === today).map(t => t.text.toLowerCase()));
                     const newTasks: Task[] = parsed
                       .filter(t => !existingTexts.has(t.toLowerCase()))
-                      .map((t, i) => ({ id: `extra_${Date.now()}_${i}`, text: t, done: false, date: today }));
+                      .map((t, i) => ({ id: `extra_${Date.now()}_${i}`, text: t, done: false, date: today, source: 'coach' as const }));
                     if (newTasks.length > 0) {
                       const all = [...existing, ...newTasks];
                       await storage.saveTasks(all);
@@ -980,7 +980,7 @@ function ChatScreen() {
       const existingTexts = new Set(existing.filter(t => t.date === today).map(t => t.text.toLowerCase()));
       const newTasks: Task[] = parsed
         .filter(t => !existingTexts.has(t.toLowerCase()))
-        .map((t, i) => ({ id: `chat_${Date.now()}_${i}`, text: t, done: false, date: today }));
+        .map((t, i) => ({ id: `chat_${Date.now()}_${i}`, text: t, done: false, date: today, source: 'coach' as const }));
       if (newTasks.length > 0) {
         await storage.saveTasks([...existing, ...newTasks]);
         setTasksBanner(newTasks.length);
@@ -1110,7 +1110,7 @@ function TodosScreen() {
     if (!formText.trim()) return;
     let updated: Task[];
     if (isNew) {
-      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today }];
+      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today, source: 'user' as const }];
     } else {
       updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim() } : t);
     }
@@ -1140,22 +1140,60 @@ function TodosScreen() {
     }
   }
 
+  // Задача от коуча: явный source или legacy-id с подчёркиванием
+  const isCoach = (t: Task) =>
+    t.source === 'coach' || (!t.source && (t.id.includes('_') || t.id.startsWith('chat') || t.id.startsWith('extra')));
+
   const activeCount = tasks.filter(t => !t.done).length;
   const todayCount  = tasks.filter(t => t.date === today).length;
   const doneCount   = tasks.filter(t => t.done).length;
 
   const filtered = tasks
     .filter(t => filter === 'active' ? !t.done : filter === 'today' ? t.date === today : t.done)
-    .sort((a, b) => {
-      if (a.done !== b.done) return a.done ? 1 : -1;
-      return b.date.localeCompare(a.date);
-    });
+    .sort((a, b) => b.date.localeCompare(a.date));
+
+  const coachTasks = filtered.filter(isCoach);
+  const userTasks  = filtered.filter(t => !isCoach(t));
 
   const FILTERS: [TodoFilter, string][] = [
     ['active', `Активные · ${activeCount}`],
     ['today',  `Сегодня · ${todayCount}`],
     ['done',   `Готово · ${doneCount}`],
   ];
+
+  function TaskCard({ task }: { task: Task }) {
+    return (
+      <View style={[st.card, { padding: 14 }]}>
+        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+          <TouchableOpacity onPress={() => toggleTask(task.id)}
+            style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
+              alignItems: 'center', justifyContent: 'center' },
+              task.done ? { backgroundColor: '#4F46E5', borderColor: '#4F46E5' } : { borderColor: '#D1D5DB' }]}>
+            {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+          </TouchableOpacity>
+          <View style={{ flex: 1 }}>
+            <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
+              textDecorationLine: task.done ? 'line-through' : 'none' }}>{task.text}</Text>
+            <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
+              {task.date === today ? 'Сегодня' : task.date}
+            </Text>
+          </View>
+          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
+            {!task.done && (
+              <TouchableOpacity onPress={() => openEdit(task)}
+                style={{ padding: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
+                <Text style={{ fontSize: 15 }}>✏️</Text>
+              </TouchableOpacity>
+            )}
+            <TouchableOpacity onPress={() => deleteTask(task.id)}
+              style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+              <Text style={{ fontSize: 15 }}>🗑</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </View>
+    );
+  }
 
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
@@ -1181,9 +1219,7 @@ function TodosScreen() {
       <ScrollView contentContainerStyle={[st.content, { gap: 8 }]}>
         {filtered.length === 0 ? (
           <View style={[st.card, { alignItems: 'center', paddingVertical: 40 }]}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>
-              {filter === 'done' ? '🏆' : '📝'}
-            </Text>
+            <Text style={{ fontSize: 48, marginBottom: 12 }}>{filter === 'done' ? '🏆' : '📝'}</Text>
             <Text style={[st.cardTitle, { textAlign: 'center' }]}>
               {filter === 'done' ? 'Нет выполненных дел' : filter === 'today' ? 'Нет дел на сегодня' : 'Нет активных дел'}
             </Text>
@@ -1194,41 +1230,35 @@ function TodosScreen() {
             )}
           </View>
         ) : (
-          filtered.map(task => (
-            <View key={task.id} style={[st.card, { padding: 14 }]}>
-              <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-                <TouchableOpacity onPress={() => toggleTask(task.id)}
-                  style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
-                    alignItems: 'center', justifyContent: 'center' },
-                    task.done
-                      ? { backgroundColor: '#4F46E5', borderColor: '#4F46E5' }
-                      : { borderColor: '#D1D5DB' }]}>
-                  {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
-                </TouchableOpacity>
-                <View style={{ flex: 1 }}>
-                  <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
-                    textDecorationLine: task.done ? 'line-through' : 'none' }}>
-                    {task.text}
+          <>
+            {/* Секция коуча */}
+            {coachTasks.length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
+                    🤖 ОТ КОУЧА
                   </Text>
-                  <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
-                    {task.date === today ? 'Сегодня' : task.date}
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                </View>
+                {coachTasks.map(t => <TaskCard key={t.id} task={t} />)}
+              </>
+            )}
+
+            {/* Секция пользователя */}
+            {userTasks.length > 0 && (
+              <>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: coachTasks.length > 0 ? 8 : 4 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
+                    📝 МОИ ЗАДАЧИ
                   </Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
                 </View>
-                <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-                  {!task.done && (
-                    <TouchableOpacity onPress={() => openEdit(task)}
-                      style={{ padding: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
-                      <Text style={{ fontSize: 15 }}>✏️</Text>
-                    </TouchableOpacity>
-                  )}
-                  <TouchableOpacity onPress={() => deleteTask(task.id)}
-                    style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
-                    <Text style={{ fontSize: 15 }}>🗑</Text>
-                  </TouchableOpacity>
-                </View>
-              </View>
-            </View>
-          ))
+                {userTasks.map(t => <TaskCard key={t.id} task={t} />)}
+              </>
+            )}
+          </>
         )}
       </ScrollView>
 
