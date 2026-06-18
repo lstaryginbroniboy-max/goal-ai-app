@@ -1,0 +1,16 @@
+{
+  "name": "Лучшая версия себя",
+  "short_name": "МояЦель",
+  "description": "AI-коуч для достижения целей",
+  "start_url": "/goal-ai-app/",
+  "scope": "/goal-ai-app/",
+  "display": "standalone",
+  "background_color": "#4F46E5",
+  "theme_color": "#4F46E5",
+  "orientation": "portrait",
+  "icons": [
+    { "src": "/goal-ai-app/favicon.ico", "sizes": "48x48", "type": "image/x-icon" },
+    { "src": "/goal-ai-app/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any maskable" },
+    { "src": "/goal-ai-app/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
