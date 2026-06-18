@@ -306,6 +306,26 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
 }
 
 // ─── Pomodoro ─────────────────────────────────────────────────────────────────
+function playAlarm() {
+  try {
+    const AudioCtx = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
+    if (!AudioCtx) return;
+    const ctx = new AudioCtx();
+    [0, 0.45, 0.9].forEach(delay => {
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = 880;
+      osc.type = 'sine';
+      gain.gain.setValueAtTime(0.7, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.35);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.35);
+    });
+  } catch (_) {}
+}
+
 const POMO_PHASES = [
   { name: 'Фокус',  duration: 25 * 60, color: '#4F46E5', bg: '#EEF2FF', emoji: '🎯' },
   { name: 'Пауза',  duration:  5 * 60, color: '#10B981', bg: '#D1FAE5', emoji: '☕' },
@@ -325,6 +345,7 @@ function usePomodoro() {
         setTimeLeft(t => {
           if (t > 1) return t - 1;
           clearInterval(ivRef.current);
+          playAlarm();
           const next = (phase + 1) % 2;
           if (next === 0) setSessions(s => s + 1);
           setPhase(next);
@@ -379,12 +400,14 @@ function PomodoroModal({ pomo }: { pomo: PomoState }) {
   const pct = ((cur.duration - timeLeft) / cur.duration) * 100;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
-      <View style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}>
-        <View style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => { setRunning(false); setVisible(false); }}>
+      <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
+        onPress={() => { setRunning(false); setVisible(false); }}>
+        <TouchableOpacity activeOpacity={1} onPress={() => {}}
+          style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
-            <TouchableOpacity onPress={() => setVisible(false)}>
+            <TouchableOpacity onPress={() => { setRunning(false); setVisible(false); }}>
               <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -434,8 +457,8 @@ function PomodoroModal({ pomo }: { pomo: PomoState }) {
             ))}
           </View>
           <View style={{ height: 8 }} />
-        </View>
-      </View>
+        </TouchableOpacity>
+      </TouchableOpacity>
     </Modal>
   );
 }
