@@ -1087,11 +1087,17 @@ function ChatScreen() {
 // ─── Todos ────────────────────────────────────────────────────────────────────
 type TodoFilter = 'active' | 'bydate' | 'done';
 
+const TASK_COLORS = [
+  '#EF4444', '#F97316', '#EAB308', '#22C55E',
+  '#14B8A6', '#3B82F6', '#8B5CF6', '#EC4899',
+];
+
 function TodosScreen() {
   const [tasks,       setTasks]       = useState<Task[]>([]);
   const [editTask,    setEditTask]    = useState<Task | null>(null);
   const [isNew,       setIsNew]       = useState(false);
   const [formText,    setFormText]    = useState('');
+  const [formColor,   setFormColor]   = useState<string | undefined>(undefined);
   const [filter,      setFilter]      = useState<TodoFilter>('active');
   const [selDate,     setSelDate]     = useState(todayString());
   const today = todayString();
@@ -1099,19 +1105,19 @@ function TodosScreen() {
   useEffect(() => { storage.getTasks().then(setTasks); }, []);
 
   function openAdd() {
-    setFormText(''); setIsNew(true);
+    setFormText(''); setFormColor(undefined); setIsNew(true);
     setEditTask({ id: '', text: '', done: false, date: today });
   }
   function openEdit(task: Task) {
-    setFormText(task.text); setIsNew(false); setEditTask(task);
+    setFormText(task.text); setFormColor(task.color); setIsNew(false); setEditTask(task);
   }
   async function saveTask() {
     if (!formText.trim()) return;
     let updated: Task[];
     if (isNew) {
-      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today, source: 'user' as const }];
+      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today, source: 'user' as const, color: formColor }];
     } else {
-      updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim() } : t);
+      updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim(), color: formColor } : t);
     }
     await storage.saveTasks(updated);
     setTasks(updated);
@@ -1188,35 +1194,40 @@ function TodosScreen() {
   }
 
   function TaskCard({ task }: { task: Task }) {
+    const accent = task.color;
     return (
-      <View style={[st.card, { padding: 14 }]}>
-        <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
-          <TouchableOpacity onPress={() => toggleTask(task.id)}
-            style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
-              alignItems: 'center', justifyContent: 'center' },
-              task.done ? { backgroundColor: '#4F46E5', borderColor: '#4F46E5' } : { borderColor: '#D1D5DB' }]}>
-            {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
-          </TouchableOpacity>
-          <View style={{ flex: 1 }}>
-            <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
-              textDecorationLine: task.done ? 'line-through' : 'none' }}>{task.text}</Text>
-            {filter !== 'bydate' && (
-              <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
-                {task.date === today ? 'Сегодня' : task.date}
-              </Text>
-            )}
-          </View>
-          <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
-            {!task.done && (
+      <View style={[st.card, { padding: 0, overflow: 'hidden', flexDirection: 'row' }]}>
+        {/* Цветная полоска слева */}
+        <View style={{ width: 5, backgroundColor: accent ?? '#E5E7EB', borderTopLeftRadius: 12, borderBottomLeftRadius: 12 }} />
+        <View style={{ flex: 1, padding: 14 }}>
+          <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
+            <TouchableOpacity onPress={() => toggleTask(task.id)}
+              style={[{ width: 26, height: 26, borderRadius: 13, borderWidth: 2, marginTop: 2,
+                alignItems: 'center', justifyContent: 'center' },
+                task.done
+                  ? { backgroundColor: accent ?? '#4F46E5', borderColor: accent ?? '#4F46E5' }
+                  : { borderColor: accent ?? '#D1D5DB' }]}>
+              {task.done && <Text style={{ color: '#fff', fontSize: 12, fontWeight: '800' }}>✓</Text>}
+            </TouchableOpacity>
+            <View style={{ flex: 1 }}>
+              <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
+                textDecorationLine: task.done ? 'line-through' : 'none' }}>{task.text}</Text>
+              {filter !== 'bydate' && (
+                <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
+                  {task.date === today ? 'Сегодня' : task.date}
+                </Text>
+              )}
+            </View>
+            <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
               <TouchableOpacity onPress={() => openEdit(task)}
-                style={{ padding: 6, backgroundColor: '#EEF2FF', borderRadius: 8 }}>
+                style={{ padding: 6, backgroundColor: accent ? accent + '22' : '#EEF2FF', borderRadius: 8 }}>
                 <Text style={{ fontSize: 15 }}>✏️</Text>
               </TouchableOpacity>
-            )}
-            <TouchableOpacity onPress={() => deleteTask(task.id)}
-              style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
-              <Text style={{ fontSize: 15 }}>🗑</Text>
-            </TouchableOpacity>
+              <TouchableOpacity onPress={() => deleteTask(task.id)}
+                style={{ padding: 6, backgroundColor: '#FEE2E2', borderRadius: 8 }}>
+                <Text style={{ fontSize: 15 }}>🗑</Text>
+              </TouchableOpacity>
+            </View>
           </View>
         </View>
       </View>
@@ -1351,7 +1362,26 @@ function TodosScreen() {
                 placeholder="Что нужно сделать?" placeholderTextColor="#9CA3AF"
                 multiline autoFocus
               />
-              <TouchableOpacity style={st.primaryBtn} onPress={saveTask}>
+              {/* Выбор цвета */}
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Цвет метки</Text>
+              <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
+                {/* Без цвета */}
+                <TouchableOpacity onPress={() => setFormColor(undefined)}
+                  style={{ width: 34, height: 34, borderRadius: 17, borderWidth: 2.5,
+                    borderColor: formColor === undefined ? '#4F46E5' : '#D1D5DB',
+                    backgroundColor: '#F3F4F6', alignItems: 'center', justifyContent: 'center' }}>
+                  {formColor === undefined && <Text style={{ fontSize: 14, color: '#4F46E5' }}>✕</Text>}
+                </TouchableOpacity>
+                {TASK_COLORS.map(c => (
+                  <TouchableOpacity key={c} onPress={() => setFormColor(c)}
+                    style={{ width: 34, height: 34, borderRadius: 17, backgroundColor: c,
+                      borderWidth: 2.5, borderColor: formColor === c ? '#111827' : 'transparent',
+                      alignItems: 'center', justifyContent: 'center' }}>
+                    {formColor === c && <Text style={{ fontSize: 14, color: '#fff', fontWeight: '900' }}>✓</Text>}
+                  </TouchableOpacity>
+                ))}
+              </View>
+              <TouchableOpacity style={[st.primaryBtn, formColor ? { backgroundColor: formColor } : {}]} onPress={saveTask}>
                 <Text style={st.primaryBtnText}>{isNew ? 'Добавить' : 'Сохранить'}</Text>
               </TouchableOpacity>
               <View style={{ height: 8 }} />

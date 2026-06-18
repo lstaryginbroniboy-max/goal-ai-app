@@ -28,6 +28,7 @@ export interface Task {
   done: boolean;
   date: string;
   source?: 'user' | 'coach';
+  color?: string;
 }
 
 export interface Habit {
