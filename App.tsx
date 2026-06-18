@@ -765,12 +765,6 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           <Text style={[st.statNum, { color: '#DC2626' }]}>{topStreak > 0 ? `🔥${topStreak}` : '—'}</Text>
           <Text style={st.statLabel}>лучший стрик</Text>
         </View>
-        {todayMood && (
-          <View style={[st.statBox, { backgroundColor: 'transparent' }]}>
-            <Text style={[st.statNum, { color: '#fff' }]}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
-            <Text style={[st.statLabel, { color: 'rgba(255,255,255,0.8)' }]}>настроение</Text>
-          </View>
-        )}
       </View>
 
       {/* ── Quick action bar ── */}
