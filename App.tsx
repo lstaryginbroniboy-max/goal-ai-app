@@ -720,7 +720,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
 
   const done        = tasks.filter(t => t.done).length;
   const checkinTitle: Record<CheckinType, string> = {
-    daily: '☀️ Утренний чек-ин', weekly: '📊 Разбор недели', evening: '🌙 Вечерний ритуал',
+    daily: '☀️ Утро', weekly: '📊 Разбор недели', evening: '🌙 Вечерний ритуал',
   };
 
   return (
@@ -781,7 +781,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
       <View style={st.actionBar}>
         <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('daily')}>
           <Text style={{ fontSize: 18 }}>☀️</Text>
-          <Text style={st.actionBarLabel}>Чек-ин</Text>
+          <Text style={st.actionBarLabel}>Утро</Text>
         </TouchableOpacity>
         <View style={st.actionBarDivider} />
         <TouchableOpacity style={st.actionBarBtn} onPress={() => openCheckin('evening')}>
@@ -813,7 +813,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
             onPress={() => openCheckin('daily')}>
             <Text style={{ fontSize: 24, marginRight: 12 }}>☀️</Text>
             <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: primary, fontSize: 14 }}>Начать утренний чек-ин</Text>
+              <Text style={{ fontWeight: '700', color: primary, fontSize: 14 }}>Начать утро</Text>
               <Text style={{ color: '#6B7280', fontSize: 12, marginTop: 2 }}>Макс ждёт — нажми чтобы начать</Text>
             </View>
             <Text style={{ fontSize: 18, color: primary }}>→</Text>
@@ -913,10 +913,10 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
             <Text style={{ fontSize: 44, marginBottom: 10 }}>🤖</Text>
             <Text style={[st.cardTitle, { textAlign: 'center', marginBottom: 6 }]}>Нет задач на сегодня</Text>
             <Text style={{ color: '#6B7280', textAlign: 'center', marginBottom: 18, fontSize: 14 }}>
-              Пройди утренний чек-ин — коуч составит план
+              Пройди утро — коуч составит план
             </Text>
             <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={() => openCheckin('daily')}>
-              <Text style={st.primaryBtnText}>☀️ Начать чек-ин</Text>
+              <Text style={st.primaryBtnText}>☀️ Утро</Text>
             </TouchableOpacity>
           </View>
         ) : (
@@ -2571,7 +2571,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
           ))}
           {tasks.length === 0 && (
             <Text style={{ color: '#9CA3AF', fontSize: 13, textAlign: 'center' }}>
-              Задачи появятся после утреннего чек-ина с Максом
+              Задачи появятся после утра с Максом
             </Text>
           )}
         </View>
