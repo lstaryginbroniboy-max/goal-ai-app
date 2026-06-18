@@ -1085,14 +1085,15 @@ function ChatScreen() {
 }
 
 // ─── Todos ────────────────────────────────────────────────────────────────────
-type TodoFilter = 'active' | 'today' | 'done';
+type TodoFilter = 'active' | 'bydate' | 'done';
 
 function TodosScreen() {
-  const [tasks,    setTasks]    = useState<Task[]>([]);
-  const [editTask, setEditTask] = useState<Task | null>(null);
-  const [isNew,    setIsNew]    = useState(false);
-  const [formText, setFormText] = useState('');
-  const [filter,   setFilter]   = useState<TodoFilter>('active');
+  const [tasks,       setTasks]       = useState<Task[]>([]);
+  const [editTask,    setEditTask]    = useState<Task | null>(null);
+  const [isNew,       setIsNew]       = useState(false);
+  const [formText,    setFormText]    = useState('');
+  const [filter,      setFilter]      = useState<TodoFilter>('active');
+  const [selDate,     setSelDate]     = useState(todayString());
   const today = todayString();
 
   useEffect(() => { storage.getTasks().then(setTasks); }, []);
@@ -1101,11 +1102,9 @@ function TodosScreen() {
     setFormText(''); setIsNew(true);
     setEditTask({ id: '', text: '', done: false, date: today });
   }
-
   function openEdit(task: Task) {
     setFormText(task.text); setIsNew(false); setEditTask(task);
   }
-
   async function saveTask() {
     if (!formText.trim()) return;
     let updated: Task[];
@@ -1118,12 +1117,10 @@ function TodosScreen() {
     setTasks(updated);
     setEditTask(null);
   }
-
   async function toggleTask(id: string) {
     await storage.toggleTask(id);
     setTasks(prev => prev.map(t => t.id === id ? { ...t, done: !t.done } : t));
   }
-
   async function deleteTask(id: string) {
     const doDelete = async () => {
       const updated = tasks.filter(t => t.id !== id);
@@ -1140,26 +1137,55 @@ function TodosScreen() {
     }
   }
 
-  // Задача от коуча: явный source или legacy-id с подчёркиванием
   const isCoach = (t: Task) =>
     t.source === 'coach' || (!t.source && (t.id.includes('_') || t.id.startsWith('chat') || t.id.startsWith('extra')));
 
+  // Все уникальные даты с задачами, отсортированные по убыванию
+  const taskDates = [...new Set(tasks.map(t => t.date))].sort((a, b) => b.localeCompare(a));
+
+  function shiftDate(ds: string, delta: number): string {
+    const d = new Date(ds + 'T00:00:00');
+    d.setDate(d.getDate() + delta);
+    return d.toISOString().split('T')[0];
+  }
+
+  function formatDateNav(ds: string): string {
+    const d = new Date(ds + 'T00:00:00');
+    if (ds === today) return 'Сегодня';
+    if (ds === shiftDate(today, -1)) return 'Вчера';
+    return d.toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', weekday: 'short' });
+  }
+
+  const prevDate = shiftDate(selDate, -1);
+  const nextDate = shiftDate(selDate, 1);
+  const canGoNext = selDate < today;
+
   const activeCount = tasks.filter(t => !t.done).length;
-  const todayCount  = tasks.filter(t => t.date === today).length;
   const doneCount   = tasks.filter(t => t.done).length;
 
-  const filtered = tasks
-    .filter(t => filter === 'active' ? !t.done : filter === 'today' ? t.date === today : t.done)
-    .sort((a, b) => b.date.localeCompare(a.date));
+  const filtered = filter === 'bydate'
+    ? tasks.filter(t => t.date === selDate)
+    : tasks.filter(t => filter === 'active' ? !t.done : t.done)
+        .sort((a, b) => b.date.localeCompare(a.date));
 
   const coachTasks = filtered.filter(isCoach);
   const userTasks  = filtered.filter(t => !isCoach(t));
 
   const FILTERS: [TodoFilter, string][] = [
     ['active', `Активные · ${activeCount}`],
-    ['today',  `Сегодня · ${todayCount}`],
+    ['bydate', 'По дням 📅'],
     ['done',   `Готово · ${doneCount}`],
   ];
+
+  function SectionDivider({ label }: { label: string }) {
+    return (
+      <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+        <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>{label}</Text>
+        <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+      </View>
+    );
+  }
 
   function TaskCard({ task }: { task: Task }) {
     return (
@@ -1174,9 +1200,11 @@ function TodosScreen() {
           <View style={{ flex: 1 }}>
             <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
               textDecorationLine: task.done ? 'line-through' : 'none' }}>{task.text}</Text>
-            <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
-              {task.date === today ? 'Сегодня' : task.date}
-            </Text>
+            {filter !== 'bydate' && (
+              <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
+                {task.date === today ? 'Сегодня' : task.date}
+              </Text>
+            )}
           </View>
           <View style={{ flexDirection: 'row', gap: 6, alignItems: 'center' }}>
             {!task.done && (
@@ -1195,6 +1223,35 @@ function TodosScreen() {
     );
   }
 
+  function TaskSections() {
+    if (filtered.length === 0) {
+      return (
+        <View style={[st.card, { alignItems: 'center', paddingVertical: 40 }]}>
+          <Text style={{ fontSize: 44, marginBottom: 12 }}>📭</Text>
+          <Text style={[st.cardTitle, { textAlign: 'center' }]}>Нет задач</Text>
+          {filter === 'active' && (
+            <TouchableOpacity style={[st.primaryBtn, { marginTop: 16 }]} onPress={openAdd}>
+              <Text style={st.primaryBtnText}>+ Добавить дело</Text>
+            </TouchableOpacity>
+          )}
+        </View>
+      );
+    }
+    return (
+      <>
+        {userTasks.length > 0 && (
+          <><SectionDivider label="📝 МОИ ЗАДАЧИ" />{userTasks.map(t => <TaskCard key={t.id} task={t} />)}</>
+        )}
+        {coachTasks.length > 0 && (
+          <>
+            <SectionDivider label="🤖 ОТ КОУЧА" />
+            {coachTasks.map(t => <TaskCard key={t.id} task={t} />)}
+          </>
+        )}
+      </>
+    );
+  }
+
   return (
     <View style={{ flex: 1, backgroundColor: '#F9FAFB' }}>
       <View style={st.topBar}>
@@ -1207,7 +1264,7 @@ function TodosScreen() {
       {/* Filter tabs */}
       <View style={{ flexDirection: 'row', backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB' }}>
         {FILTERS.map(([key, label]) => (
-          <TouchableOpacity key={key} onPress={() => setFilter(key)}
+          <TouchableOpacity key={key} onPress={() => { setFilter(key); if (key === 'bydate') setSelDate(today); }}
             style={{ flex: 1, paddingVertical: 11, alignItems: 'center',
               borderBottomWidth: 2.5, borderBottomColor: filter === key ? '#4F46E5' : 'transparent' }}>
             <Text style={{ fontSize: 12, fontWeight: filter === key ? '700' : '500',
@@ -1216,50 +1273,65 @@ function TodosScreen() {
         ))}
       </View>
 
-      <ScrollView contentContainerStyle={[st.content, { gap: 8 }]}>
-        {filtered.length === 0 ? (
-          <View style={[st.card, { alignItems: 'center', paddingVertical: 40 }]}>
-            <Text style={{ fontSize: 48, marginBottom: 12 }}>{filter === 'done' ? '🏆' : '📝'}</Text>
-            <Text style={[st.cardTitle, { textAlign: 'center' }]}>
-              {filter === 'done' ? 'Нет выполненных дел' : filter === 'today' ? 'Нет дел на сегодня' : 'Нет активных дел'}
-            </Text>
-            {filter !== 'done' && (
-              <TouchableOpacity style={[st.primaryBtn, { marginTop: 16 }]} onPress={openAdd}>
-                <Text style={st.primaryBtnText}>+ Добавить дело</Text>
-              </TouchableOpacity>
-            )}
+      {/* Навигатор по дням */}
+      {filter === 'bydate' && (
+        <View style={{ backgroundColor: '#fff', borderBottomWidth: 1, borderBottomColor: '#E5E7EB', paddingVertical: 10, paddingHorizontal: 16 }}>
+          {/* Стрелки навигации */}
+          <View style={{ flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
+            <TouchableOpacity onPress={() => setSelDate(prevDate)}
+              style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#EEF2FF', alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: '#4F46E5' }}>‹</Text>
+            </TouchableOpacity>
+            <View style={{ alignItems: 'center' }}>
+              <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{formatDateNav(selDate)}</Text>
+              {selDate !== today && (
+                <TouchableOpacity onPress={() => setSelDate(today)}>
+                  <Text style={{ fontSize: 11, color: '#4F46E5', marginTop: 2 }}>← Вернуться к сегодня</Text>
+                </TouchableOpacity>
+              )}
+            </View>
+            <TouchableOpacity onPress={() => canGoNext && setSelDate(nextDate)}
+              style={{ width: 36, height: 36, borderRadius: 18,
+                backgroundColor: canGoNext ? '#EEF2FF' : '#F3F4F6',
+                alignItems: 'center', justifyContent: 'center' }}>
+              <Text style={{ fontSize: 18, color: canGoNext ? '#4F46E5' : '#D1D5DB' }}>›</Text>
+            </TouchableOpacity>
           </View>
-        ) : (
-          <>
-            {/* Секция пользователя */}
-            {userTasks.length > 0 && (
-              <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: 4 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
-                    📝 МОИ ЗАДАЧИ
+          {/* Мини-полоска дней с задачами */}
+          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: 6 }}>
+            {taskDates.slice(0, 14).map(ds => {
+              const dayTasks = tasks.filter(t => t.date === ds);
+              const doneCnt  = dayTasks.filter(t => t.done).length;
+              const allDone  = doneCnt === dayTasks.length;
+              const isActive = ds === selDate;
+              const d = new Date(ds + 'T00:00:00');
+              return (
+                <TouchableOpacity key={ds} onPress={() => setSelDate(ds)}
+                  style={{ alignItems: 'center', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 10,
+                    backgroundColor: isActive ? '#4F46E5' : '#F3F4F6',
+                    borderWidth: 1.5, borderColor: isActive ? '#4F46E5' : '#E5E7EB' }}>
+                  <Text style={{ fontSize: 10, fontWeight: '600',
+                    color: isActive ? 'rgba(255,255,255,0.8)' : '#9CA3AF' }}>
+                    {d.toLocaleDateString('ru-RU', { weekday: 'short' })}
                   </Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                </View>
-                {userTasks.map(t => <TaskCard key={t.id} task={t} />)}
-              </>
-            )}
+                  <Text style={{ fontSize: 14, fontWeight: '800',
+                    color: isActive ? '#fff' : '#111827' }}>
+                    {d.getDate()}
+                  </Text>
+                  <View style={{ width: 6, height: 6, borderRadius: 3, marginTop: 3,
+                    backgroundColor: isActive ? 'rgba(255,255,255,0.7)' : allDone ? '#10B981' : '#F59E0B' }} />
+                  <Text style={{ fontSize: 9, color: isActive ? 'rgba(255,255,255,0.7)' : '#9CA3AF', marginTop: 1 }}>
+                    {doneCnt}/{dayTasks.length}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </ScrollView>
+        </View>
+      )}
 
-            {/* Секция коуча */}
-            {coachTasks.length > 0 && (
-              <>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginTop: userTasks.length > 0 ? 8 : 4 }}>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                  <Text style={{ fontSize: 12, fontWeight: '700', color: '#6B7280', letterSpacing: 0.5 }}>
-                    🤖 ОТ КОУЧА
-                  </Text>
-                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
-                </View>
-                {coachTasks.map(t => <TaskCard key={t.id} task={t} />)}
-              </>
-            )}
-          </>
-        )}
+      <ScrollView contentContainerStyle={[st.content, { gap: 8 }]}>
+        <TaskSections />
       </ScrollView>
 
       {/* Add / Edit modal */}
