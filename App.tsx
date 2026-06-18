@@ -585,7 +585,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   const [weekDone,       setWeekDone]       = useState(0);
   const [topStreak,      setTopStreak]      = useState(0);
   const [weather,        setWeather]        = useState<{ current: number; max: number } | null>(null);
-  const scrollRef    = useRef<ScrollView>(null);
+  const scrollRef     = useRef<ScrollView>(null);
+  const mainScrollRef = useRef<ScrollView>(null);
+  const [tasksY, setTasksY] = useState(0);
   const voiceBaseRef = useRef('');
   const tts          = useTTS();
 
@@ -749,10 +751,11 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
 
       {/* ── Stats row ── */}
       <View style={[st.statsRow, { backgroundColor: primary }]}>
-        <View style={[st.statBox, { backgroundColor: light }]}>
+        <TouchableOpacity style={[st.statBox, { backgroundColor: light }]}
+          onPress={() => mainScrollRef.current?.scrollTo({ y: tasksY, animated: true })} activeOpacity={0.7}>
           <Text style={[st.statNum, { color: primary }]}>{done}/{tasks.length}</Text>
           <Text style={st.statLabel}>задач сегодня</Text>
-        </View>
+        </TouchableOpacity>
         <View style={[st.statBox, { backgroundColor: '#FEF3C7' }]}>
           <Text style={[st.statNum, { color: '#D97706' }]}>{weekDone}</Text>
           <Text style={st.statLabel}>за неделю</Text>
@@ -792,7 +795,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         </TouchableOpacity>
       </View>
 
-      <ScrollView contentContainerStyle={[st.content, { paddingBottom: 80 }]}>
+      <ScrollView ref={mainScrollRef} contentContainerStyle={[st.content, { paddingBottom: 80 }]}>
         {!hasKey && (
           <TouchableOpacity style={st.warnCard} onPress={onSettings}>
             <Text style={st.warnText}>⚠️ Добавь API ключ в настройках — нажми сюда →</Text>
@@ -890,7 +893,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         })()}
 
         {/* Tasks */}
-        <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary }]}>
+        <View onLayout={e => setTasksY(e.nativeEvent.layout.y)} style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary }]}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
             <Text style={st.cardTitle}>✅ Задачи на сегодня</Text>
             <Text style={{ fontSize: 13, color: '#6B7280' }}>{done} / {tasks.length}</Text>
