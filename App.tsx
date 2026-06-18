@@ -745,65 +745,69 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           </TouchableOpacity>
         )}
 
-        {/* Daily quote */}
-        {(() => { const q = getTodayQuote(); return (
-          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
-            <Text style={{ fontSize: 12, fontWeight: '700', color: '#D97706', marginBottom: 8, letterSpacing: 0.5 }}>
-              ⚡ ЦИТАТА ДНЯ
-            </Text>
-            <Text style={{ fontSize: 15, color: '#111827', lineHeight: 24, fontStyle: 'italic' }}>
-              «{q.text}»
-            </Text>
-            <Text style={{ fontSize: 13, color: '#B45309', marginTop: 8, fontWeight: '600' }}>
-              — {q.author}
-            </Text>
-          </View>
-        ); })()}
-
-        {/* Mood tracker */}
-        {!todayMood ? (
-          <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
-            <Text style={st.sectionPill}>🌡️ Как ты сегодня?</Text>
-            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Настроение</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
-              {MOOD_EMOJIS.map((e, i) => (
-                <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, mood: i + 1 }))}
-                  style={{ alignItems: 'center', padding: 6, borderRadius: 12,
-                    backgroundColor: draftMood.mood === i + 1 ? '#EEF2FF' : 'transparent' }}>
-                  <Text style={{ fontSize: 28 }}>{e}</Text>
+        {/* Daily quote + Mood — одна строка когда настроение указано */}
+        {(() => {
+          const q = getTodayQuote();
+          if (todayMood) {
+            return (
+              <View style={{ flexDirection: 'row', gap: 10 }}>
+                {/* Цитата — левая карточка */}
+                <View style={[st.card, { flex: 3, borderLeftWidth: 3, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginBottom: 5, letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+                  <Text style={{ fontSize: 12, color: '#111827', lineHeight: 17, fontStyle: 'italic' }} numberOfLines={5}>«{q.text}»</Text>
+                  <Text style={{ fontSize: 11, color: '#B45309', marginTop: 5, fontWeight: '600' }}>— {q.author}</Text>
+                </View>
+                {/* Самочувствие — правая карточка */}
+                <View style={[st.card, { flex: 2, borderLeftWidth: 3, borderLeftColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center' }]}>
+                  <Text style={{ fontSize: 26 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
+                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#111827', marginTop: 4, textAlign: 'center' }}>Самочувствие</Text>
+                  <Text style={{ fontSize: 12, color: '#6B7280', marginTop: 3, textAlign: 'center' }}>{ENERGY_ICONS[todayMood.energy - 1]} энергия</Text>
+                  <TouchableOpacity onPress={() => setTodayMood(null)} style={{ marginTop: 6 }}>
+                    <Text style={{ color: '#9CA3AF', fontSize: 11 }}>изменить</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            );
+          }
+          // Настроение не выбрано — цитата компактно + форма
+          return (
+            <>
+              <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+                <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706', marginBottom: 6, letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+                <Text style={{ fontSize: 13, color: '#111827', lineHeight: 20, fontStyle: 'italic' }}>«{q.text}»</Text>
+                <Text style={{ fontSize: 12, color: '#B45309', marginTop: 6, fontWeight: '600' }}>— {q.author}</Text>
+              </View>
+              <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
+                <Text style={st.sectionPill}>🌡️ Как ты сегодня?</Text>
+                <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Настроение</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 12 }}>
+                  {MOOD_EMOJIS.map((e, i) => (
+                    <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, mood: i + 1 }))}
+                      style={{ alignItems: 'center', padding: 6, borderRadius: 12,
+                        backgroundColor: draftMood.mood === i + 1 ? '#EEF2FF' : 'transparent' }}>
+                      <Text style={{ fontSize: 28 }}>{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Энергия</Text>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
+                  {ENERGY_ICONS.map((e, i) => (
+                    <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, energy: i + 1 }))}
+                      style={{ alignItems: 'center', padding: 8, borderRadius: 12,
+                        backgroundColor: draftMood.energy === i + 1 ? '#EEF2FF' : 'transparent' }}>
+                      <Text style={{ fontSize: 22 }}>{e}</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+                <TouchableOpacity
+                  style={[st.primaryBtn, (!draftMood.mood || !draftMood.energy) && { backgroundColor: '#C7D2FE' }]}
+                  onPress={saveMood} disabled={!draftMood.mood || !draftMood.energy}>
+                  <Text style={st.primaryBtnText}>Сохранить</Text>
                 </TouchableOpacity>
-              ))}
-            </View>
-            <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Энергия</Text>
-            <View style={{ flexDirection: 'row', justifyContent: 'space-between', marginBottom: 14 }}>
-              {ENERGY_ICONS.map((e, i) => (
-                <TouchableOpacity key={i} onPress={() => setDraftMood(p => ({ ...p, energy: i + 1 }))}
-                  style={{ alignItems: 'center', padding: 8, borderRadius: 12,
-                    backgroundColor: draftMood.energy === i + 1 ? '#EEF2FF' : 'transparent' }}>
-                  <Text style={{ fontSize: 22 }}>{e}</Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-            <TouchableOpacity
-              style={[st.primaryBtn, (!draftMood.mood || !draftMood.energy) && { backgroundColor: '#C7D2FE' }]}
-              onPress={saveMood} disabled={!draftMood.mood || !draftMood.energy}>
-              <Text style={st.primaryBtnText}>Сохранить</Text>
-            </TouchableOpacity>
-          </View>
-        ) : (
-          <View style={[st.card, { flexDirection: 'row', alignItems: 'center', borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
-            <Text style={{ fontSize: 30, marginRight: 12 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
-            <View style={{ flex: 1 }}>
-              <Text style={{ fontWeight: '700', color: '#111827' }}>Самочувствие сегодня</Text>
-              <Text style={{ color: '#6B7280', fontSize: 13, marginTop: 2 }}>
-                {MOOD_EMOJIS[todayMood.mood - 1]} настроение  ·  {ENERGY_ICONS[todayMood.energy - 1]} энергия
-              </Text>
-            </View>
-            <TouchableOpacity onPress={() => setTodayMood(null)}>
-              <Text style={{ color: '#9CA3AF', fontSize: 12 }}>изменить</Text>
-            </TouchableOpacity>
-          </View>
-        )}
+              </View>
+            </>
+          );
+        })()}
 
         {/* Tasks */}
         <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#4F46E5' }]}>
