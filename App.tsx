@@ -412,14 +412,14 @@ function PomodoroModal({ pomo }: { pomo: PomoState }) {
   const pct = ((cur.duration - timeLeft) / cur.duration) * 100;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => { pause(); setVisible(false); }}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => setVisible(false)}>
       <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-        onPress={() => { pause(); setVisible(false); }}>
+        onPress={() => setVisible(false)}>
         <TouchableOpacity activeOpacity={1} onPress={() => {}}
           style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
-            <TouchableOpacity onPress={() => { pause(); setVisible(false); }}>
+            <TouchableOpacity onPress={() => setVisible(false)}>
               <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -2575,6 +2575,20 @@ export default function App() {
             {tab === 'habits'   && <HabitsScreen />}
             {tab === 'settings' && <SettingsScreen onBack={() => goTab('home')} onReset={() => { setTab('home'); setScreen('onboarding'); }} />}
           </View>
+          {/* Полоска таймера — видна на всех вкладках */}
+          {pomo.running && (
+            <TouchableOpacity onPress={() => pomo.setVisible(true)} activeOpacity={0.85}
+              style={{ backgroundColor: pomo.cur.color, flexDirection: 'row', alignItems: 'center',
+                justifyContent: 'space-between', paddingVertical: 8, paddingHorizontal: 18 }}>
+              <Text style={{ color: '#fff', fontSize: 13, fontWeight: '600' }}>
+                {pomo.cur.emoji} {pomo.cur.name}
+              </Text>
+              <Text style={{ color: '#fff', fontSize: 20, fontWeight: '800', letterSpacing: 1.5 }}>
+                {pomo.mins}:{pomo.secs}
+              </Text>
+              <Text style={{ color: 'rgba(255,255,255,0.7)', fontSize: 12 }}>нажми чтобы открыть</Text>
+            </TouchableOpacity>
+          )}
           <View style={st.tabBar}>
             {TABS.map(t => (
               <TouchableOpacity key={t.key} style={st.tabItem} onPress={() => goTab(t.key)} activeOpacity={0.7}>
