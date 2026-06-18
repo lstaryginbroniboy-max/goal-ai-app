@@ -954,7 +954,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               );
             })()}
           </>
-        ) : null)}
+        ))}
 
         {!tasksCollapsed && done > 0 && done === tasks.length && (
           <View style={[st.card, { backgroundColor: '#D1FAE5', alignItems: 'center' }]}>
