@@ -161,7 +161,6 @@ function MicButton({
 }
 
 const GOAL_LABELS: { key: keyof Goals; emoji: string; title: string }[] = [
-  { key: 'day',     emoji: '☀️', title: 'Цели на сегодня' },
   { key: 'week',    emoji: '📋', title: 'Цели на неделю' },
   { key: 'month',   emoji: '📅', title: 'Цели на месяц' },
   { key: 'year',    emoji: '🎯', title: 'Цели на год' },
@@ -169,7 +168,6 @@ const GOAL_LABELS: { key: keyof Goals; emoji: string; title: string }[] = [
 ];
 
 const GOAL_STEPS = [
-  { key: 'day',      emoji: '☀️', title: 'Что сделать сегодня?',      sub: 'Одно-три дела, которые реально сдвинут тебя вперёд прямо сейчас' },
   { key: 'week',     emoji: '📋', title: 'Фокус этой недели',          sub: 'Что должно быть сделано к концу недели, чтобы ты остался доволен?' },
   { key: 'month',    emoji: '📅', title: 'Цель месяца',                sub: 'Какой результат через 30 дней скажет тебе: «Не зря старался»?' },
   { key: 'year',     emoji: '🎯', title: 'Кем ты станешь за год?',     sub: 'Через 12 месяцев — что изменится в твоей жизни, карьере, здоровье?' },
