@@ -332,40 +332,52 @@ const POMO_PHASES = [
 ];
 
 function usePomodoro() {
-  const [phase,    setPhase]    = useState(0);
-  const [timeLeft, setTimeLeft] = useState(POMO_PHASES[0].duration);
-  const [running,  setRunning]  = useState(false);
-  const [sessions, setSessions] = useState(0);
-  const [visible,  setVisible]  = useState(false);
+  const [phase,     setPhase]     = useState(0);
+  // endTime — когда истекает фаза (ms timestamp); null = на паузе
+  const [endTime,   setEndTime]   = useState<number | null>(null);
+  const [remaining, setRemaining] = useState(POMO_PHASES[0].duration * 1000); // ms остаток при паузе
+  const [sessions,  setSessions]  = useState(0);
+  const [visible,   setVisible]   = useState(false);
+  const [tick,      setTick]      = useState(0); // форс-апдейт для отрисовки
   const ivRef = useRef<any>(null);
+
+  const running  = endTime !== null;
+  const msLeft   = running ? Math.max(0, endTime - Date.now()) : remaining;
+  const timeLeft = Math.ceil(msLeft / 1000);
 
   useEffect(() => {
     if (running) {
       ivRef.current = setInterval(() => {
-        setTimeLeft(t => {
-          if (t > 1) return t - 1;
+        const left = endTime! - Date.now();
+        if (left <= 0) {
           clearInterval(ivRef.current);
           playAlarm();
           const next = (phase + 1) % 2;
           if (next === 0) setSessions(s => s + 1);
           setPhase(next);
-          setTimeLeft(POMO_PHASES[next].duration);
-          setRunning(false);
-          return POMO_PHASES[next].duration;
-        });
-      }, 1000);
+          setEndTime(null);
+          setRemaining(POMO_PHASES[next].duration * 1000);
+        } else {
+          setTick(n => n + 1);
+        }
+      }, 500);
     } else {
       clearInterval(ivRef.current);
     }
     return () => clearInterval(ivRef.current);
-  }, [running, phase]);
+  }, [running, endTime, phase]);
+
+  function start()  { setEndTime(Date.now() + remaining); }
+  function pause()  { setRemaining(Math.max(0, endTime! - Date.now())); setEndTime(null); }
+  function reset()  { setEndTime(null); setRemaining(POMO_PHASES[phase].duration * 1000); }
+  function switchPhase(i: number) { setPhase(i); setEndTime(null); setRemaining(POMO_PHASES[i].duration * 1000); }
 
   const cur  = POMO_PHASES[phase];
   const mins = Math.floor(timeLeft / 60).toString().padStart(2, '0');
   const secs = (timeLeft % 60).toString().padStart(2, '0');
 
   return { phase, timeLeft, running, sessions, visible,
-           setVisible, setRunning, setPhase, setTimeLeft, setSessions, cur, mins, secs };
+           setVisible, start, pause, reset, switchPhase, cur, mins, secs };
 }
 
 type PomoState = ReturnType<typeof usePomodoro>;
@@ -396,18 +408,18 @@ function PomodoroButton({ pomo }: { pomo: PomoState }) {
 // Модальное окно помодоро — рендерится на уровне App, живёт вечно
 function PomodoroModal({ pomo }: { pomo: PomoState }) {
   const { phase, timeLeft, running, sessions, visible,
-          setVisible, setRunning, setPhase, setTimeLeft, cur, mins, secs } = pomo;
+          setVisible, start, pause, reset, switchPhase, cur, mins, secs } = pomo;
   const pct = ((cur.duration - timeLeft) / cur.duration) * 100;
 
   return (
-    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => { setRunning(false); setVisible(false); }}>
+    <Modal visible={visible} animationType="slide" transparent onRequestClose={() => { pause(); setVisible(false); }}>
       <TouchableOpacity activeOpacity={1} style={{ flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' }}
-        onPress={() => { setRunning(false); setVisible(false); }}>
+        onPress={() => { pause(); setVisible(false); }}>
         <TouchableOpacity activeOpacity={1} onPress={() => {}}
           style={{ backgroundColor: '#fff', borderTopLeftRadius: 28, borderTopRightRadius: 28, padding: 28 }}>
           <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 24 }}>
             <Text style={{ fontSize: 20, fontWeight: '800', color: '#111827' }}>⏱ Помодоро</Text>
-            <TouchableOpacity onPress={() => { setRunning(false); setVisible(false); }}>
+            <TouchableOpacity onPress={() => { pause(); setVisible(false); }}>
               <Text style={{ fontSize: 24, color: '#9CA3AF' }}>✕</Text>
             </TouchableOpacity>
           </View>
@@ -432,21 +444,21 @@ function PomodoroModal({ pomo }: { pomo: PomoState }) {
             <TouchableOpacity
               style={{ flex: 1, backgroundColor: running ? '#FEE2E2' : cur.color,
                 borderRadius: 14, padding: 15, alignItems: 'center' }}
-              onPress={() => setRunning(!running)}>
+              onPress={() => running ? pause() : start()}>
               <Text style={{ color: running ? '#DC2626' : '#fff', fontSize: 16, fontWeight: '700' }}>
                 {running ? '⏸ Пауза' : '▶ Старт'}
               </Text>
             </TouchableOpacity>
             <TouchableOpacity
               style={{ width: 50, backgroundColor: '#F3F4F6', borderRadius: 14, alignItems: 'center', justifyContent: 'center' }}
-              onPress={() => { setRunning(false); setTimeLeft(cur.duration); }}>
+              onPress={reset}>
               <Text style={{ fontSize: 22 }}>↺</Text>
             </TouchableOpacity>
           </View>
 
           <View style={{ flexDirection: 'row', gap: 8 }}>
             {POMO_PHASES.map((p, i) => (
-              <TouchableOpacity key={i} onPress={() => { setPhase(i); setTimeLeft(p.duration); setRunning(false); }}
+              <TouchableOpacity key={i} onPress={() => switchPhase(i)}
                 style={{ flex: 1, padding: 10, borderRadius: 12, backgroundColor: phase === i ? p.bg : '#F9FAFB',
                   borderWidth: 1.5, borderColor: phase === i ? p.color : '#E5E7EB', alignItems: 'center' }}>
                 <Text style={{ fontSize: 16 }}>{p.emoji}</Text>
