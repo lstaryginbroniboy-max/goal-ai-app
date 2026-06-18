@@ -1559,11 +1559,16 @@ function GoalsScreen({ onSettings }: { onSettings: () => void }) {
 
   const daysLeft = (c: Commitment): number | null => {
     if (!c.deadline) return null;
-    let date = new Date(c.deadline);
-    // Поддержка формата ДД.ММ.ГГГГ
+    const s = c.deadline.trim();
+    let date = new Date(s);
     if (isNaN(date.getTime())) {
-      const p = c.deadline.split('.');
-      if (p.length === 3) date = new Date(`${p[2]}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`);
+      // ДД.ММ.ГГ или ДД.ММ.ГГГГ
+      const p = s.split('.');
+      if (p.length === 3) {
+        let y = p[2];
+        if (y.length <= 2) y = '20' + y.padStart(2, '0');
+        date = new Date(`${y}-${p[1].padStart(2,'0')}-${p[0].padStart(2,'0')}`);
+      }
     }
     if (isNaN(date.getTime())) return null;
     return Math.ceil((date.getTime() - Date.now()) / 86_400_000);
