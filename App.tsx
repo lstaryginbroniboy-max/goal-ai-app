@@ -822,14 +822,33 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           </View>
         ) : (
           <>
-            {tasks.map(task => (
-              <TouchableOpacity key={task.id} style={st.taskRow} onPress={() => toggleTask(task.id)} activeOpacity={0.7}>
-                <View style={[st.checkbox, task.done && st.checkboxDone]}>
-                  {task.done && <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>✓</Text>}
+            {(() => {
+              const isCoachTask = (t: Task) =>
+                t.source === 'coach' || (!t.source && (t.id.includes('_') || t.id.startsWith('chat') || t.id.startsWith('extra')));
+              const userTs  = tasks.filter(t => !isCoachTask(t));
+              const coachTs = tasks.filter(t =>  isCoachTask(t));
+              const row = (task: Task) => (
+                <TouchableOpacity key={task.id} style={st.taskRow} onPress={() => toggleTask(task.id)} activeOpacity={0.7}>
+                  <View style={[st.checkbox, task.done && st.checkboxDone]}>
+                    {task.done && <Text style={{ color: '#fff', fontWeight: 'bold', fontSize: 13 }}>✓</Text>}
+                  </View>
+                  <Text style={[st.taskText, task.done && st.taskDone]}>{task.text}</Text>
+                </TouchableOpacity>
+              );
+              const divider = (label: string) => (
+                <View key={label} style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginVertical: 6 }}>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#9CA3AF', letterSpacing: 0.5 }}>{label}</Text>
+                  <View style={{ flex: 1, height: 1, backgroundColor: '#E5E7EB' }} />
                 </View>
-                <Text style={[st.taskText, task.done && st.taskDone]}>{task.text}</Text>
-              </TouchableOpacity>
-            ))}
+              );
+              return (
+                <>
+                  {userTs.length > 0 && <>{divider('📝 МОИ ЗАДАЧИ')}{userTs.map(row)}</>}
+                  {coachTs.length > 0 && <>{divider('🤖 ОТ КОУЧА')}{coachTs.map(row)}</>}
+                </>
+              );
+            })()}
           </>
         )}
 
