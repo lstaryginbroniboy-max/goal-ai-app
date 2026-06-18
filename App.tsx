@@ -326,29 +326,21 @@ function playAlarm() {
     const AudioCtx = (globalThis as any).AudioContext || (globalThis as any).webkitAudioContext;
     if (!AudioCtx) return;
     const ctx = new AudioCtx();
-    // Compressor at the output to maximize perceived loudness without clipping
-    const comp = ctx.createDynamicsCompressor();
-    comp.threshold.value = -6;
-    comp.knee.value = 3;
-    comp.ratio.value = 4;
-    comp.attack.value = 0.001;
-    comp.release.value = 0.1;
-    comp.connect(ctx.destination);
-
-    [0, 0.5, 1.0, 1.5].forEach(delay => {
-      // Two oscillators per beep — 880Hz + 440Hz = fuller, louder sound
-      [880, 440].forEach((freq, fi) => {
-        const osc  = ctx.createOscillator();
-        const gain = ctx.createGain();
-        osc.connect(gain);
-        gain.connect(comp);
-        osc.frequency.value = freq;
-        osc.type = 'sawtooth'; // more harmonics = louder perceived volume
-        gain.gain.setValueAtTime(fi === 0 ? 0.9 : 0.5, ctx.currentTime + delay);
-        gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.45);
-        osc.start(ctx.currentTime + delay);
-        osc.stop(ctx.currentTime + delay + 0.45);
-      });
+    // Square wave is perceived much louder than sine/sawtooth at the same gain
+    // 5 beeps alternating 1000Hz / 800Hz for alarm feel
+    const freqs = [1000, 800, 1000, 800, 1000];
+    freqs.forEach((freq, i) => {
+      const delay = i * 0.38;
+      const osc  = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.frequency.value = freq;
+      osc.type = 'square';
+      gain.gain.setValueAtTime(1.0, ctx.currentTime + delay);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + delay + 0.3);
+      osc.start(ctx.currentTime + delay);
+      osc.stop(ctx.currentTime + delay + 0.3);
     });
   } catch (_) {}
 }
