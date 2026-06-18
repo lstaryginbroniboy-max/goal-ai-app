@@ -2096,6 +2096,66 @@ function SettingsScreen({ onBack, onReset, onThemeChange }: { onBack: () => void
       </View>
       <ScrollView contentContainerStyle={[st.content, { gap: 12 }]}>
 
+        {/* О приложении */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>ℹ️ О приложении</Text>
+          <Text style={{ color: '#6B7280', lineHeight: 22, fontSize: 14 }}>
+            Лучшая версия себя — твой персональный ИИ-коуч.{'\n\n'}
+            Каждый день спрашивает о прогрессе, ставит задачи и помогает достигать целей. История хранится только на твоём устройстве.
+          </Text>
+        </View>
+
+        {/* Цветовая тема */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>🎨 Цветовая тема</Text>
+          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 14 }}>Выбери оформление приложения</Text>
+          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
+            {APP_THEMES.map(theme => {
+              const isActive = theme.primary === primary;
+              return (
+                <TouchableOpacity key={theme.id} onPress={() => onThemeChange(theme.primary, theme.light)}
+                  style={{ alignItems: 'center', gap: 6 }}>
+                  <View style={{ width: 48, height: 48, borderRadius: 24,
+                    backgroundColor: theme.primary,
+                    borderWidth: isActive ? 3 : 2,
+                    borderColor: isActive ? '#111827' : 'transparent',
+                    shadowColor: theme.primary, shadowOpacity: isActive ? 0.5 : 0,
+                    shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: isActive ? 4 : 0,
+                    alignItems: 'center', justifyContent: 'center' }}>
+                    {isActive && <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900' }}>✓</Text>}
+                  </View>
+                  <Text style={{ fontSize: 11, color: isActive ? theme.primary : '#6B7280', fontWeight: isActive ? '700' : '400' }}>
+                    {theme.name}
+                  </Text>
+                </TouchableOpacity>
+              );
+            })}
+          </View>
+        </View>
+
+        {/* Часовой пояс */}
+        <View style={st.card}>
+          <Text style={st.cardTitle}>🌍 Часовой пояс</Text>
+          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>
+            ИИ будет знать твоё текущее время и адаптировать советы под день/вечер/утро
+          </Text>
+          {city ? (
+            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
+              <View style={{ flex: 1 }}>
+                <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{city.name}</Text>
+                <Text style={{ fontSize: 13, color: '#6B7280' }}>
+                  UTC{city.utcOffset >= 0 ? '+' : ''}{city.utcOffset}  ·  сейчас {getCityTime(city).timeStr}
+                </Text>
+              </View>
+            </View>
+          ) : (
+            <Text style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 10 }}>Город не выбран</Text>
+          )}
+          <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={() => setShowCityPicker(true)}>
+            <Text style={st.primaryBtnText}>{city ? 'Изменить город' : 'Выбрать город'}</Text>
+          </TouchableOpacity>
+        </View>
+
         {/* Active provider banner */}
         <View style={[st.card, { backgroundColor: light, borderWidth: 1.5, borderColor: primary }]}>
           <Text style={{ fontSize: 13, color: primary, fontWeight: '600', marginBottom: 4 }}>АКТИВНЫЙ ИИ</Text>
@@ -2198,65 +2258,6 @@ function SettingsScreen({ onBack, onReset, onThemeChange }: { onBack: () => void
             </View>
           );
         })}
-
-        {/* Цветовая тема */}
-        <View style={st.card}>
-          <Text style={st.cardTitle}>🎨 Цветовая тема</Text>
-          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 14 }}>Выбери оформление приложения</Text>
-          <View style={{ flexDirection: 'row', flexWrap: 'wrap', gap: 12 }}>
-            {APP_THEMES.map(theme => {
-              const isActive = theme.primary === primary;
-              return (
-                <TouchableOpacity key={theme.id} onPress={() => onThemeChange(theme.primary, theme.light)}
-                  style={{ alignItems: 'center', gap: 6 }}>
-                  <View style={{ width: 48, height: 48, borderRadius: 24,
-                    backgroundColor: theme.primary,
-                    borderWidth: isActive ? 3 : 2,
-                    borderColor: isActive ? '#111827' : 'transparent',
-                    shadowColor: theme.primary, shadowOpacity: isActive ? 0.5 : 0,
-                    shadowRadius: 8, shadowOffset: { width: 0, height: 2 }, elevation: isActive ? 4 : 0,
-                    alignItems: 'center', justifyContent: 'center' }}>
-                    {isActive && <Text style={{ color: '#fff', fontSize: 18, fontWeight: '900' }}>✓</Text>}
-                  </View>
-                  <Text style={{ fontSize: 11, color: isActive ? theme.primary : '#6B7280', fontWeight: isActive ? '700' : '400' }}>
-                    {theme.name}
-                  </Text>
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-        </View>
-
-        {/* City / timezone */}
-        <View style={st.card}>
-          <Text style={st.cardTitle}>🌍 Часовой пояс</Text>
-          <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 12 }}>
-            ИИ будет знать твоё текущее время и адаптировать советы под день/вечер/утро
-          </Text>
-          {city ? (
-            <View style={{ flexDirection: 'row', alignItems: 'center', marginBottom: 10 }}>
-              <View style={{ flex: 1 }}>
-                <Text style={{ fontSize: 16, fontWeight: '700', color: '#111827' }}>{city.name}</Text>
-                <Text style={{ fontSize: 13, color: '#6B7280' }}>
-                  UTC{city.utcOffset >= 0 ? '+' : ''}{city.utcOffset}  ·  сейчас {getCityTime(city).timeStr}
-                </Text>
-              </View>
-            </View>
-          ) : (
-            <Text style={{ color: '#9CA3AF', fontSize: 14, marginBottom: 10 }}>Город не выбран</Text>
-          )}
-          <TouchableOpacity style={[st.primaryBtn, { backgroundColor: primary }]} onPress={() => setShowCityPicker(true)}>
-            <Text style={st.primaryBtnText}>{city ? 'Изменить город' : 'Выбрать город'}</Text>
-          </TouchableOpacity>
-        </View>
-
-        <View style={st.card}>
-          <Text style={st.cardTitle}>ℹ️ О приложении</Text>
-          <Text style={{ color: '#6B7280', lineHeight: 22, fontSize: 14 }}>
-            Лучшая версия себя — твой персональный ИИ-коуч.{'\n\n'}
-            Каждый день спрашивает о прогрессе, ставит задачи и помогает достигать целей. История хранится только на твоём устройстве.
-          </Text>
-        </View>
 
         <TouchableOpacity style={[st.primaryBtn, { backgroundColor: '#FEE2E2' }]} onPress={handleReset}>
           <Text style={[st.primaryBtnText, { color: '#DC2626' }]}>Сбросить историю и задачи</Text>
