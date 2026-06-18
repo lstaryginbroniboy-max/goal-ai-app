@@ -1098,6 +1098,7 @@ function TodosScreen() {
   const [isNew,       setIsNew]       = useState(false);
   const [formText,    setFormText]    = useState('');
   const [formColor,   setFormColor]   = useState<string | undefined>(undefined);
+  const [formDate,    setFormDate]    = useState(todayString());
   const [filter,      setFilter]      = useState<TodoFilter>('active');
   const [selDate,     setSelDate]     = useState(todayString());
   const today = todayString();
@@ -1105,19 +1106,19 @@ function TodosScreen() {
   useEffect(() => { storage.getTasks().then(setTasks); }, []);
 
   function openAdd() {
-    setFormText(''); setFormColor(undefined); setIsNew(true);
+    setFormText(''); setFormColor(undefined); setFormDate(today); setIsNew(true);
     setEditTask({ id: '', text: '', done: false, date: today });
   }
   function openEdit(task: Task) {
-    setFormText(task.text); setFormColor(task.color); setIsNew(false); setEditTask(task);
+    setFormText(task.text); setFormColor(task.color); setFormDate(task.date); setIsNew(false); setEditTask(task);
   }
   async function saveTask() {
     if (!formText.trim()) return;
     let updated: Task[];
     if (isNew) {
-      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: today, source: 'user' as const, color: formColor }];
+      updated = [...tasks, { id: Date.now().toString(), text: formText.trim(), done: false, date: formDate, source: 'user' as const, color: formColor }];
     } else {
-      updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim(), color: formColor } : t);
+      updated = tasks.map(t => t.id === editTask!.id ? { ...t, text: formText.trim(), color: formColor, date: formDate } : t);
     }
     await storage.saveTasks(updated);
     setTasks(updated);
@@ -1169,10 +1170,22 @@ function TodosScreen() {
   const activeCount = tasks.filter(t => !t.done).length;
   const doneCount   = tasks.filter(t => t.done).length;
 
+  function friendlyDate(ds: string): string {
+    if (ds === today) return 'Сегодня';
+    if (ds === shiftDate(today, -1)) return 'Вчера';
+    if (ds === shiftDate(today, 1)) return 'Завтра';
+    const d = new Date(ds + 'T00:00:00');
+    const label = d.toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short' });
+    if (ds < today) return `⚠️ Просрочено · ${label}`;
+    return `📅 ${label}`;
+  }
+
   const filtered = filter === 'bydate'
     ? tasks.filter(t => t.date === selDate)
     : tasks.filter(t => filter === 'active' ? !t.done : t.done)
-        .sort((a, b) => b.date.localeCompare(a.date));
+        .sort((a, b) => filter === 'active'
+          ? a.date.localeCompare(b.date)   // ближайшие первые
+          : b.date.localeCompare(a.date)); // в готово — новые первые
 
   const coachTasks = filtered.filter(isCoach);
   const userTasks  = filtered.filter(t => !isCoach(t));
@@ -1195,10 +1208,14 @@ function TodosScreen() {
 
   function TaskCard({ task }: { task: Task }) {
     const accent = task.color;
+    const isFuture  = task.date > today;
+    const isOverdue = !task.done && task.date < today;
+    const dateColor = isOverdue ? '#EF4444' : isFuture ? '#6366F1' : '#C4C9D4';
     return (
-      <View style={[st.card, { padding: 0, overflow: 'hidden', flexDirection: 'row' }]}>
-        {/* Цветная полоска слева */}
-        <View style={{ width: 5, backgroundColor: accent ?? '#E5E7EB', borderTopLeftRadius: 12, borderBottomLeftRadius: 12 }} />
+      <View style={[st.card, { padding: 0, overflow: 'hidden', flexDirection: 'row',
+        opacity: isFuture && !task.done ? 0.88 : 1 }]}>
+        <View style={{ width: 5, backgroundColor: accent ?? (isOverdue ? '#FCA5A5' : isFuture ? '#C7D2FE' : '#E5E7EB'),
+          borderTopLeftRadius: 12, borderBottomLeftRadius: 12 }} />
         <View style={{ flex: 1, padding: 14 }}>
           <View style={{ flexDirection: 'row', alignItems: 'flex-start', gap: 12 }}>
             <TouchableOpacity onPress={() => toggleTask(task.id)}
@@ -1213,8 +1230,8 @@ function TodosScreen() {
               <Text style={{ fontSize: 15, color: task.done ? '#9CA3AF' : '#111827', lineHeight: 22,
                 textDecorationLine: task.done ? 'line-through' : 'none' }}>{task.text}</Text>
               {filter !== 'bydate' && (
-                <Text style={{ fontSize: 11, color: '#C4C9D4', marginTop: 3 }}>
-                  {task.date === today ? 'Сегодня' : task.date}
+                <Text style={{ fontSize: 11, color: dateColor, marginTop: 3, fontWeight: isOverdue ? '600' : '400' }}>
+                  {friendlyDate(task.date)}
                 </Text>
               )}
             </View>
@@ -1357,11 +1374,39 @@ function TodosScreen() {
                 </TouchableOpacity>
               </View>
               <TextInput
-                style={[st.obInput, { marginBottom: 16, minHeight: 80, textAlignVertical: 'top' }]}
+                style={[st.obInput, { marginBottom: 14, minHeight: 80, textAlignVertical: 'top' }]}
                 value={formText} onChangeText={setFormText}
                 placeholder="Что нужно сделать?" placeholderTextColor="#9CA3AF"
                 multiline autoFocus
               />
+              {/* Дата задачи */}
+              <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Дата задачи</Text>
+              <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8, marginBottom: 6 }}>
+                <TouchableOpacity onPress={() => setFormDate(shiftDate(formDate, -1))}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6',
+                    alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20, color: '#4F46E5', lineHeight: 24 }}>‹</Text>
+                </TouchableOpacity>
+                <View style={{ flex: 1, paddingVertical: 9, backgroundColor: '#F3F4F6', borderRadius: 10, alignItems: 'center' }}>
+                  <Text style={{ fontSize: 14, fontWeight: '700', color: '#111827' }}>
+                    {formDate === today ? 'Сегодня' :
+                     formDate === shiftDate(today, 1) ? 'Завтра' :
+                     formDate === shiftDate(today, -1) ? 'Вчера' :
+                     new Date(formDate + 'T00:00:00').toLocaleDateString('ru-RU', { weekday: 'short', day: 'numeric', month: 'short', year: formDate.slice(0,4) !== today.slice(0,4) ? 'numeric' : undefined })}
+                  </Text>
+                </View>
+                <TouchableOpacity onPress={() => setFormDate(shiftDate(formDate, 1))}
+                  style={{ width: 36, height: 36, borderRadius: 18, backgroundColor: '#F3F4F6',
+                    alignItems: 'center', justifyContent: 'center' }}>
+                  <Text style={{ fontSize: 20, color: '#4F46E5', lineHeight: 24 }}>›</Text>
+                </TouchableOpacity>
+              </View>
+              {formDate !== today && (
+                <TouchableOpacity onPress={() => setFormDate(today)} style={{ alignSelf: 'center', marginBottom: 14 }}>
+                  <Text style={{ fontSize: 12, color: '#4F46E5' }}>← Вернуться к сегодня</Text>
+                </TouchableOpacity>
+              )}
+              {formDate === today && <View style={{ height: 14 }} />}
               {/* Выбор цвета */}
               <Text style={{ fontSize: 13, fontWeight: '600', color: '#6B7280', marginBottom: 8 }}>Цвет метки</Text>
               <View style={{ flexDirection: 'row', gap: 10, marginBottom: 20, flexWrap: 'wrap' }}>
