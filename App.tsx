@@ -588,6 +588,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   const scrollRef     = useRef<ScrollView>(null);
   const mainScrollRef = useRef<ScrollView>(null);
   const [tasksY, setTasksY] = useState(0);
+  const [tasksCollapsed, setTasksCollapsed] = useState(false);
   const voiceBaseRef = useRef('');
   const tts          = useTTS();
 
@@ -893,17 +894,24 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         })()}
 
         {/* Tasks */}
-        <View onLayout={e => setTasksY(e.nativeEvent.layout.y)} style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary }]}>
-          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 }}>
+        <TouchableOpacity onLayout={e => setTasksY(e.nativeEvent.layout.y)}
+          style={[st.card, { borderLeftWidth: 4, borderLeftColor: primary }]}
+          onPress={() => setTasksCollapsed(c => !c)} activeOpacity={0.85}>
+          <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: tasksCollapsed ? 0 : 8 }}>
             <Text style={st.cardTitle}>✅ Задачи на сегодня</Text>
-            <Text style={{ fontSize: 13, color: '#6B7280' }}>{done} / {tasks.length}</Text>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={{ fontSize: 13, color: '#6B7280' }}>{done} / {tasks.length}</Text>
+              <Text style={{ fontSize: 16, color: '#9CA3AF' }}>{tasksCollapsed ? '▼' : '▲'}</Text>
+            </View>
           </View>
-          <View style={st.progBar}>
-            <View style={[st.progFill, { width: tasks.length ? `${(done / tasks.length) * 100}%` as any : '0%', backgroundColor: primary }]} />
-          </View>
-        </View>
+          {!tasksCollapsed && (
+            <View style={st.progBar}>
+              <View style={[st.progFill, { width: tasks.length ? `${(done / tasks.length) * 100}%` as any : '0%', backgroundColor: primary }]} />
+            </View>
+          )}
+        </TouchableOpacity>
 
-        {tasks.length === 0 ? (
+        {!tasksCollapsed && (tasks.length === 0 ? (
           <View style={[st.card, { alignItems: 'center', paddingVertical: 28 }]}>
             <Text style={{ fontSize: 44, marginBottom: 10 }}>🤖</Text>
             <Text style={[st.cardTitle, { textAlign: 'center', marginBottom: 6 }]}>Нет задач на сегодня</Text>
@@ -946,9 +954,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               );
             })()}
           </>
-        )}
+        ) : null)}
 
-        {done > 0 && done === tasks.length && (
+        {!tasksCollapsed && done > 0 && done === tasks.length && (
           <View style={[st.card, { backgroundColor: '#D1FAE5', alignItems: 'center' }]}>
             <Text style={{ fontSize: 36, marginBottom: 4 }}>🏆</Text>
             <Text style={{ fontWeight: '800', color: '#065F46', fontSize: 16 }}>Все задачи выполнены!</Text>
