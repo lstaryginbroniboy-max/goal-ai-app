@@ -754,7 +754,7 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
       <View style={[st.statsRow, { backgroundColor: primary }]}>
         <TouchableOpacity style={[st.statBox, { backgroundColor: light }]}
           onPress={() => mainScrollRef.current?.scrollTo({ y: Math.max(0, tasksY - 16), animated: true })} activeOpacity={0.7}>
-          <Text style={[st.statNum, { color: primary }]}>{done}/{tasks.length}</Text>
+          <Text style={[st.statNum, { color: primary }]}>{tasks.length}</Text>
           <Text style={st.statLabel}>задач сегодня</Text>
         </TouchableOpacity>
         <View style={[st.statBox, { backgroundColor: '#FEF3C7' }]}>
