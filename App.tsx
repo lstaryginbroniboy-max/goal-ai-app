@@ -1140,8 +1140,8 @@ function TodosScreen() {
   const isCoach = (t: Task) =>
     t.source === 'coach' || (!t.source && (t.id.includes('_') || t.id.startsWith('chat') || t.id.startsWith('extra')));
 
-  // Все уникальные даты с задачами, отсортированные по убыванию
-  const taskDates = [...new Set(tasks.map(t => t.date))].sort((a, b) => b.localeCompare(a));
+  // Все уникальные даты с задачами, отсортированные по возрастанию
+  const taskDates = [...new Set(tasks.map(t => t.date))].sort((a, b) => a.localeCompare(b));
 
   function shiftDate(ds: string, delta: number): string {
     const d = new Date(ds + 'T00:00:00');
