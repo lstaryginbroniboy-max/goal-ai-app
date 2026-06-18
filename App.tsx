@@ -825,8 +825,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
             {(() => {
               const isCoachTask = (t: Task) =>
                 t.source === 'coach' || (!t.source && (t.id.includes('_') || t.id.startsWith('chat') || t.id.startsWith('extra')));
-              const userTs  = tasks.filter(t => !isCoachTask(t));
-              const coachTs = tasks.filter(t =>  isCoachTask(t));
+              const userActive  = tasks.filter(t => !isCoachTask(t) && !t.done);
+              const coachActive = tasks.filter(t =>  isCoachTask(t) && !t.done);
+              const doneTasks   = tasks.filter(t => t.done);
               const row = (task: Task) => (
                 <TouchableOpacity key={task.id} style={st.taskRow} onPress={() => toggleTask(task.id)} activeOpacity={0.7}>
                   <View style={[st.checkbox, task.done && st.checkboxDone]}>
@@ -844,8 +845,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               );
               return (
                 <>
-                  {userTs.length > 0 && <>{divider('📝 МОИ ЗАДАЧИ')}{userTs.map(row)}</>}
-                  {coachTs.length > 0 && <>{divider('🤖 ОТ КОУЧА')}{coachTs.map(row)}</>}
+                  {userActive.length  > 0 && <>{divider('📝 МОИ ЗАДАЧИ')}{userActive.map(row)}</>}
+                  {coachActive.length > 0 && <>{divider('🤖 ОТ КОУЧА')}{coachActive.map(row)}</>}
+                  {doneTasks.length   > 0 && <>{divider('✅ ВЫПОЛНЕНО')}{doneTasks.map(row)}</>}
                 </>
               );
             })()}
