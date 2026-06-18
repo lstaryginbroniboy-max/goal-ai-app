@@ -12,6 +12,13 @@ import { CITIES, City, getCityTime } from './constants/cities';
 
 type Screen = 'home' | 'todos' | 'goals' | 'habits' | 'settings' | 'onboarding' | 'stats';
 
+function localDateString(d: Date): string {
+  const y = d.getFullYear();
+  const m = String(d.getMonth() + 1).padStart(2, '0');
+  const day = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${day}`;
+}
+
 // ─── Speech Recognition ───────────────────────────────────────────────────────
 function useSpeech(
   onResult: (text: string) => void,
@@ -1174,7 +1181,7 @@ function TodosScreen() {
   function shiftDate(ds: string, delta: number): string {
     const d = new Date(ds + 'T00:00:00');
     d.setDate(d.getDate() + delta);
-    return d.toISOString().split('T')[0];
+    return localDateString(d);
   }
 
   function formatDateNav(ds: string): string {
@@ -1467,7 +1474,7 @@ function calcStreak(habitId: string, logs: HabitLog[]): number {
   let streak = 0;
   const d = new Date();
   for (let i = 0; i < 365; i++) {
-    const ds = d.toISOString().split('T')[0];
+    const ds = localDateString(d);
     if (logs.some(l => l.habitId === habitId && l.date === ds)) {
       streak++;
       d.setDate(d.getDate() - 1);
@@ -1480,7 +1487,7 @@ function getLast14(habitId: string, logs: HabitLog[]): boolean[] {
   return Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
     d.setDate(d.getDate() - (13 - i));
-    return logs.some(l => l.habitId === habitId && l.date === d.toISOString().split('T')[0]);
+    return logs.some(l => l.habitId === habitId && l.date === localDateString(d));
   });
 }
 
@@ -2211,7 +2218,7 @@ function StatsScreen({ onBack }: { onBack: () => void }) {
     return Array.from({ length: n }, (_, i) => {
       const d = new Date();
       d.setDate(d.getDate() - (n - 1 - i));
-      return d.toISOString().split('T')[0];
+      return localDateString(d);
     });
   }
 
