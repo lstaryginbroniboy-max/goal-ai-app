@@ -200,12 +200,14 @@ function OnboardingScreen({ onDone }: { onDone: () => void }) {
       return;
     }
     if (isLast) {
+      const split = (v: string | undefined) => (v || '').split('\n').map(s => s.trim()).filter(Boolean);
       const goals: Goals = {
-        day:      goalVals.day.split('\n').map(s => s.trim()).filter(Boolean),
-        week:     goalVals.week.split('\n').map(s => s.trim()).filter(Boolean),
-        month:    goalVals.month.split('\n').map(s => s.trim()).filter(Boolean),
-        year:     goalVals.year.split('\n').map(s => s.trim()).filter(Boolean),
-        fiveYear: goalVals.fiveYear.split('\n').map(s => s.trim()).filter(Boolean),
+        day:       split(goalVals.day),
+        week:      split(goalVals.week),
+        month:     split(goalVals.month),
+        year:      split(goalVals.year),
+        fiveYear:  split(goalVals.fiveYear),
+        antiGoals: split(goalVals.antiGoals),
       };
       await storage.saveGoals(goals);
       await storage.setOnboarded();
@@ -587,6 +589,8 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
   const mainScrollRef = useRef<ScrollView>(null);
   const [tasksY, setTasksY] = useState(0);
   const [tasksCollapsed, setTasksCollapsed] = useState(false);
+  const [favQuotes, setFavQuotes] = useState<{ text: string; author: string }[]>([]);
+  const [showFavQuotes, setShowFavQuotes] = useState(false);
   const voiceBaseRef = useRef('');
   const tts          = useTTS();
 
@@ -616,6 +620,9 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
 
     const mood = await storage.getTodayMood();
     setTodayMood(mood);
+
+    const fav = await storage.getFavQuotes();
+    setFavQuotes(fav);
 
     // Погода
     const city = await storage.getCity();
@@ -705,6 +712,13 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
     setTodayMood(entry);
   }
 
+  async function toggleFavQuote(q: { text: string; author: string }) {
+    const already = favQuotes.some(f => f.text === q.text);
+    const updated = already ? favQuotes.filter(f => f.text !== q.text) : [...favQuotes, q];
+    setFavQuotes(updated);
+    await storage.saveFavQuotes(updated);
+  }
+
   function openCheckin(type: CheckinType) {
     if (type === 'daily')  setCheckinPending(false);
     if (type === 'weekly') setWeeklyPending(false);
@@ -759,10 +773,11 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           <Text style={[st.statNum, { color: '#D97706' }]}>{weekDone}</Text>
           <Text style={st.statLabel}>за неделю</Text>
         </View>
-        <View style={[st.statBox, { backgroundColor: '#FEE2E2' }]}>
-          <Text style={[st.statNum, { color: '#DC2626' }]}>{topStreak > 0 ? `🔥${topStreak}` : '—'}</Text>
-          <Text style={st.statLabel}>лучший стрик</Text>
-        </View>
+        <TouchableOpacity style={[st.statBox, { backgroundColor: '#FEE2E2' }]}
+          onPress={() => setShowFavQuotes(true)} activeOpacity={0.7}>
+          <Text style={st.statNum}>❤️</Text>
+          <Text style={st.statLabel}>избранные{'\n'}цитаты</Text>
+        </TouchableOpacity>
       </View>
 
       {/* ── Quick action bar ── */}
@@ -824,15 +839,20 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
         {/* Daily quote + Mood — одна строка когда настроение указано */}
         {(() => {
           const q = getTodayQuote();
+          const isFav = favQuotes.some(f => f.text === q.text);
           if (todayMood) {
             return (
               <View style={{ flexDirection: 'row', gap: 10 }}>
                 {/* Цитата — левая карточка */}
-                <View style={[st.card, { flex: 3, borderLeftWidth: 3, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
-                  <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', marginBottom: 5, letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+                <TouchableOpacity onPress={() => toggleFavQuote(q)} activeOpacity={0.85}
+                  style={[st.card, { flex: 3, borderLeftWidth: 3, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 5 }}>
+                    <Text style={{ fontSize: 10, fontWeight: '700', color: '#D97706', letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+                    <Text style={{ fontSize: 16 }}>{isFav ? '❤️' : '🤍'}</Text>
+                  </View>
                   <Text style={{ fontSize: 12, color: '#111827', lineHeight: 17, fontStyle: 'italic' }} numberOfLines={5}>«{q.text}»</Text>
                   <Text style={{ fontSize: 11, color: '#B45309', marginTop: 5, fontWeight: '600' }}>— {q.author}</Text>
-                </View>
+                </TouchableOpacity>
                 {/* Самочувствие — правая карточка */}
                 <View style={[st.card, { flex: 2, borderLeftWidth: 3, borderLeftColor: '#8B5CF6', alignItems: 'center', justifyContent: 'center' }]}>
                   <Text style={{ fontSize: 26 }}>{MOOD_EMOJIS[todayMood.mood - 1]}</Text>
@@ -848,11 +868,15 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
           // Настроение не выбрано — цитата компактно + форма
           return (
             <>
-              <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
-                <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706', marginBottom: 6, letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+              <TouchableOpacity onPress={() => toggleFavQuote(q)} activeOpacity={0.85}
+                style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+                <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 6 }}>
+                  <Text style={{ fontSize: 11, fontWeight: '700', color: '#D97706', letterSpacing: 0.5 }}>⚡ ЦИТАТА ДНЯ</Text>
+                  <Text style={{ fontSize: 16 }}>{isFav ? '❤️' : '🤍'}</Text>
+                </View>
                 <Text style={{ fontSize: 13, color: '#111827', lineHeight: 20, fontStyle: 'italic' }}>«{q.text}»</Text>
                 <Text style={{ fontSize: 12, color: '#B45309', marginTop: 6, fontWeight: '600' }}>— {q.author}</Text>
-              </View>
+              </TouchableOpacity>
               <View style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#8B5CF6' }]}>
                 <Text style={st.sectionPill}>🌡️ Как ты сегодня?</Text>
                 <Text style={{ color: '#6B7280', fontSize: 13, marginBottom: 10 }}>Настроение</Text>
@@ -1035,6 +1059,44 @@ function HomeScreen({ onSettings, onStats, pomo }: { onSettings: () => void; onS
               </TouchableOpacity>
             </View>
           </KeyboardAvoidingView>
+        </SafeAreaView>
+      </Modal>
+
+      {/* Избранные цитаты — модальный экран */}
+      <Modal visible={showFavQuotes} animationType="slide" onRequestClose={() => setShowFavQuotes(false)}>
+        <SafeAreaView style={{ flex: 1, backgroundColor: '#fff' }}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: '#F3F4F6' }}>
+            <TouchableOpacity onPress={() => setShowFavQuotes(false)} style={{ marginRight: 12 }}>
+              <Text style={{ fontSize: 22, color: primary }}>←</Text>
+            </TouchableOpacity>
+            <Text style={{ fontSize: 18, fontWeight: '700', color: '#111827', flex: 1 }}>❤️ Избранные цитаты</Text>
+            <Text style={{ fontSize: 13, color: '#9CA3AF' }}>{favQuotes.length}</Text>
+          </View>
+          <ScrollView contentContainerStyle={{ padding: 16, gap: 12 }}>
+            {favQuotes.length === 0 ? (
+              <View style={{ alignItems: 'center', paddingTop: 60 }}>
+                <Text style={{ fontSize: 40, marginBottom: 12 }}>🤍</Text>
+                <Text style={{ fontSize: 16, color: '#6B7280', textAlign: 'center', lineHeight: 22 }}>
+                  {'Здесь появятся цитаты,\nкоторые тебя вдохновят'}
+                </Text>
+                <Text style={{ fontSize: 13, color: '#9CA3AF', marginTop: 8, textAlign: 'center' }}>
+                  Нажми на карточку «Цитата дня»{'\n'}чтобы сохранить
+                </Text>
+              </View>
+            ) : (
+              favQuotes.map((q, i) => (
+                <View key={i} style={[st.card, { borderLeftWidth: 4, borderLeftColor: '#F59E0B', backgroundColor: '#FFFBEB' }]}>
+                  <Text style={{ fontSize: 14, color: '#111827', lineHeight: 22, fontStyle: 'italic' }}>«{q.text}»</Text>
+                  <View style={{ flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginTop: 8 }}>
+                    <Text style={{ fontSize: 13, color: '#B45309', fontWeight: '600' }}>— {q.author}</Text>
+                    <TouchableOpacity onPress={() => toggleFavQuote(q)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                      <Text style={{ fontSize: 18 }}>❌</Text>
+                    </TouchableOpacity>
+                  </View>
+                </View>
+              ))
+            )}
+          </ScrollView>
         </SafeAreaView>
       </Modal>
     </View>

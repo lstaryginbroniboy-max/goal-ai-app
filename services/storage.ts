@@ -72,6 +72,7 @@ const KEYS = {
   MOOD: '@mood_entries',
   COMMITMENT: '@commitment',
   THEME: '@theme',
+  FAV_QUOTES: '@fav_quotes',
 };
 
 const DEFAULT_PROVIDER: ProviderSettings = {
@@ -253,6 +254,15 @@ export const storage = {
 
   async clearCommitment(): Promise<void> {
     await AsyncStorage.removeItem(KEYS.COMMITMENT);
+  },
+
+  async getFavQuotes(): Promise<{ text: string; author: string }[]> {
+    const raw = await AsyncStorage.getItem(KEYS.FAV_QUOTES);
+    return raw ? JSON.parse(raw) : [];
+  },
+
+  async saveFavQuotes(quotes: { text: string; author: string }[]): Promise<void> {
+    await AsyncStorage.setItem(KEYS.FAV_QUOTES, JSON.stringify(quotes));
   },
 
   async getTheme(): Promise<string> {
