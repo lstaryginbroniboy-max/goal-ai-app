@@ -1486,7 +1486,7 @@ function calcStreak(habitId: string, logs: HabitLog[]): number {
 function getLast14(habitId: string, logs: HabitLog[]): boolean[] {
   return Array.from({ length: 14 }, (_, i) => {
     const d = new Date();
-    d.setDate(d.getDate() - (13 - i));
+    d.setDate(d.getDate() - i); // i=0 сегодня (слева), i=13 — 13 дней назад (справа)
     return logs.some(l => l.habitId === habitId && l.date === localDateString(d));
   });
 }
